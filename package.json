@@ -1,0 +1,76 @@
+{
+  "name": "dsh-flash-stabilizer",
+  "version": "0.1.0",
+  "description": "DSH Flash 推理重复监控、工具重复告警与有限软纠正插件",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "compatibility",
+    "cordis.patch.yml",
+    "README.md",
+    "FEASIBILITY_REVIEW.zh-CN.md",
+    "scripts/diagnose.mjs",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.18.0",
+    "dsh": "0.2.2-rc.1 || 0.2.2-alpha.3 || 0.2.1-rc.5 || 0.2.2-alpha.2 || 0.2.1-rc.4 || 0.2.1-rc.3 || 0.2.1-rc.2 || 0.2.1-rc.1 || 0.2.1-alpha.5 || 0.2.1-alpha.4 || 0.2.1-alpha.3 || 0.2.1-alpha.2 || 0.2.1-alpha.1 || 0.2.0-rc.2 || 0.2.0-rc.1 || 0.1.7-rc.2 || 0.1.7-rc.1 || 0.1.7-alpha.2 || 0.1.7-alpha.1 || 0.1.6-alpha.2 || 0.1.6-alpha.1 || 0.1.5-rc.2 || 0.1.5-rc.1 || 0.1.5-alpha.2 || 0.1.5-alpha.1 || 0.1.3-alpha.2 || 0.1.3-alpha.1 || 0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.4 || 0.1.2-alpha.3 || 0.1.2-alpha.2 || 0.1.2-alpha.1 || 0.1.1-rc.2 || 0.1.1-rc.1 || 0.1.0-rc.8 || 0.1.0-rc.7"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pretest": "npm run build",
+    "test:compat": "vitest run tests/compatibility.test.ts",
+    "test:host": "vitest run tests/host.test.ts",
+    "test:versions": "npm run build && node scripts/test-versions.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
+    "prepack": "npm run build",
+    "matrix": "node scripts/render-matrix.mjs",
+    "diagnose": "node scripts/diagnose.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.6-alpha.2 || 4.0.6-alpha.1 || 4.0.5 || 4.1.0 || 4.0.5-alpha.2 || 4.0.5-alpha.1 || 4.0.4 || 4.0.3 || 4.0.2 || 4.0.1",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1 || 0.2.2-alpha.3 || 0.2.1-rc.5 || 0.2.2-alpha.2 || 0.2.1-rc.4 || 0.2.1-rc.3 || 0.2.1-rc.2 || 0.2.1-rc.1 || 0.2.1-alpha.5 || 0.2.1-alpha.4 || 0.2.1-alpha.3 || 0.2.1-alpha.2 || 0.2.1-alpha.1 || 0.2.0-rc.2 || 0.2.0-rc.1 || 0.1.7-rc.2 || 0.1.7-rc.1 || 0.1.7-alpha.2 || 0.1.7-alpha.1 || 0.1.6-alpha.2 || 0.1.6-alpha.1 || 0.1.5-rc.2 || 0.1.5-rc.1 || 0.1.5-alpha.2 || 0.1.5-alpha.1 || 0.1.3-alpha.2 || 0.1.3-alpha.1 || 0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.4 || 0.1.2-alpha.3 || 0.1.2-alpha.2 || 0.1.2-alpha.1 || 0.1.1-rc.2 || 0.1.1-rc.1 || 0.1.0-rc.8 || 0.1.0-rc.7",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1 || 0.2.2-alpha.3 || 0.2.1-rc.5 || 0.2.2-alpha.2 || 0.2.1-rc.4 || 0.2.1-rc.3 || 0.2.1-rc.2 || 0.2.1-rc.1 || 0.2.1-alpha.5 || 0.2.1-alpha.4 || 0.2.1-alpha.3 || 0.2.1-alpha.2 || 0.2.1-alpha.1 || 0.2.0-rc.2 || 0.2.0-rc.1 || 0.1.7-rc.2 || 0.1.7-rc.1 || 0.1.7-alpha.2 || 0.1.7-alpha.1 || 0.1.6-alpha.2 || 0.1.6-alpha.1 || 0.1.5-rc.2 || 0.1.5-rc.1 || 0.1.5-alpha.2 || 0.1.5-alpha.1 || 0.1.3-alpha.2 || 0.1.3-alpha.1 || 0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.4 || 0.1.2-alpha.3 || 0.1.2-alpha.2 || 0.1.2-alpha.1 || 0.1.1-rc.2 || 0.1.1-rc.1 || 0.1.0-rc.8 || 0.1.0-rc.7",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1 || 0.2.2-alpha.3 || 0.2.1-rc.5 || 0.2.2-alpha.2 || 0.2.1-rc.4 || 0.2.1-rc.3 || 0.2.1-rc.2 || 0.2.1-rc.1 || 0.2.1-alpha.5 || 0.2.1-alpha.4 || 0.2.1-alpha.3 || 0.2.1-alpha.2 || 0.2.1-alpha.1 || 0.2.0-rc.2 || 0.2.0-rc.1 || 0.1.7-rc.2 || 0.1.7-rc.1 || 0.1.7-alpha.2 || 0.1.7-alpha.1 || 0.1.6-alpha.2 || 0.1.6-alpha.1 || 0.1.5-rc.2 || 0.1.5-rc.1 || 0.1.5-alpha.2 || 0.1.5-alpha.1 || 0.1.3-alpha.2 || 0.1.3-alpha.1 || 0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.4 || 0.1.2-alpha.3 || 0.1.2-alpha.2 || 0.1.2-alpha.1 || 0.1.1-rc.2 || 0.1.1-rc.1 || 0.1.0-rc.8 || 0.1.0-rc.7"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
+    "@types/node": "^24.0.0",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  }
+}

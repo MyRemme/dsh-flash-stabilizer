@@ -1,0 +1,8 @@
+node_modules/
+dist/
+artifacts/
+.npm-cache/
+.compat-cache/
+coverage/
+*.tgz
+*.log

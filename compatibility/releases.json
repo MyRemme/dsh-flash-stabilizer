@@ -1,0 +1,1536 @@
+{
+  "checkedAt": "2026-11-11",
+  "repository": "deepseek-ai/deepseek-harness",
+  "scope": "Official GitHub release entries visible on the audit date; excludes unpublished npm versions, source builds and forks.",
+  "releases": [
+    {
+      "version": "0.2.2-rc.1",
+      "tag": "dsh-v0.2.2-rc.1",
+      "published": "2026-11-04T13:07:14Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": true
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2b1698e39c663f4d8d7760ebdaef647bed693257"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8a48b89895db0ddb8908ec6359eb67af60fe0f54"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "14be9c87f84925959cc3bda9004a35bc7604007f"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "d2d10d6b5be2d77696470e82164bda47322c2112"
+        },
+        {
+          "path": "packages/core/tools/src/events.ts",
+          "sha": "f736de89084686bc5020079b26cbc174bc2096d2"
+        }
+      ]
+    },
+    {
+      "version": "0.2.2-alpha.3",
+      "tag": "dsh-v0.2.2-alpha.3",
+      "published": "2026-11-03T07:56:48Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.3",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": true
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2b1698e39c663f4d8d7760ebdaef647bed693257"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8a48b89895db0ddb8908ec6359eb67af60fe0f54"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "14be9c87f84925959cc3bda9004a35bc7604007f"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "d2d10d6b5be2d77696470e82164bda47322c2112"
+        },
+        {
+          "path": "packages/core/tools/src/events.ts",
+          "sha": "f736de89084686bc5020079b26cbc174bc2096d2"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-rc.5",
+      "tag": "dsh-v0.2.1-rc.5",
+      "published": "2026-10-30T02:12:26Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca939d4dfb2347f03a808225c2e0feb826a38c45"
+        }
+      ]
+    },
+    {
+      "version": "0.2.2-alpha.2",
+      "tag": "dsh-v0.2.2-alpha.2",
+      "published": "2026-10-28T02:50:54Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": true
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2b1698e39c663f4d8d7760ebdaef647bed693257"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "5c5d4b1e74253c18ff6c0052fff0dbd4c97d2797"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "14be9c87f84925959cc3bda9004a35bc7604007f"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "d2d10d6b5be2d77696470e82164bda47322c2112"
+        },
+        {
+          "path": "packages/core/tools/src/events.ts",
+          "sha": "f736de89084686bc5020079b26cbc174bc2096d2"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-rc.4",
+      "tag": "dsh-v0.2.1-rc.4",
+      "published": "2026-10-28T02:49:58Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.4",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca939d4dfb2347f03a808225c2e0feb826a38c45"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-rc.3",
+      "tag": "dsh-v0.2.1-rc.3",
+      "published": "2026-10-23T15:26:39Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.3",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca939d4dfb2347f03a808225c2e0feb826a38c45"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-rc.2",
+      "tag": "dsh-v0.2.1-rc.2",
+      "published": "2026-10-17T08:16:33Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca939d4dfb2347f03a808225c2e0feb826a38c45"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-rc.1",
+      "tag": "dsh-v0.2.1-rc.1",
+      "published": "2026-10-17T05:22:10Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca939d4dfb2347f03a808225c2e0feb826a38c45"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-alpha.5",
+      "tag": "dsh-v0.2.1-alpha.5",
+      "published": "2026-10-16T12:23:28Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.5",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca939d4dfb2347f03a808225c2e0feb826a38c45"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-alpha.4",
+      "tag": "dsh-v0.2.1-alpha.4",
+      "published": "2026-10-15T13:40:02Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.4",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "0970c7e2b04748074525faa3f7206fabf6b4d2aa"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-alpha.3",
+      "tag": "dsh-v0.2.1-alpha.3",
+      "published": "2026-10-14T13:32:15Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.3",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8001ab81d8f4e159f1b5e02e12af4f7f6223f625"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b4a5f82ad371291efde69dd6a01e7d80e7a82a0e"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "0970c7e2b04748074525faa3f7206fabf6b4d2aa"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-alpha.2",
+      "tag": "dsh-v0.2.1-alpha.2",
+      "published": "2026-10-09T11:09:26Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "794352dc837f0d7c0d9335e3da607e5eb9da91a8"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "10dde1a62673d98133e83e12edd98b0630d35f25"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "e506d99da0f986e59ff8c744f8695be568effbcf"
+        }
+      ]
+    },
+    {
+      "version": "0.2.1-alpha.1",
+      "tag": "dsh-v0.2.1-alpha.1",
+      "published": "2026-10-03T06:42:19Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "0fa89afc054a819493206cef65dd7907092cdd7f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "54453607f5c07f31baea3e6fd722f94cec71ad5d"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "b1c9081bfe9c56bf0d33e44b498ee26b674d2d30"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca89f370febac1fa24f84cc25351a186866fe7e7"
+        }
+      ]
+    },
+    {
+      "version": "0.2.0-rc.2",
+      "tag": "dsh-v0.2.0-rc.2",
+      "published": "2026-09-29T09:42:36Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "54453607f5c07f31baea3e6fd722f94cec71ad5d"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "d67245d216aec55b218f7852268382ff9e06810f"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca89f370febac1fa24f84cc25351a186866fe7e7"
+        }
+      ]
+    },
+    {
+      "version": "0.2.0-rc.1",
+      "tag": "dsh-v0.2.0-rc.1",
+      "published": "2026-09-28T12:36:21Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "54453607f5c07f31baea3e6fd722f94cec71ad5d"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "d67245d216aec55b218f7852268382ff9e06810f"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca89f370febac1fa24f84cc25351a186866fe7e7"
+        }
+      ]
+    },
+    {
+      "version": "0.1.7-rc.2",
+      "tag": "dsh-v0.1.7-rc.2",
+      "published": "2026-09-24T14:10:21Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "54453607f5c07f31baea3e6fd722f94cec71ad5d"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "d67245d216aec55b218f7852268382ff9e06810f"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "ca89f370febac1fa24f84cc25351a186866fe7e7"
+        }
+      ]
+    },
+    {
+      "version": "0.1.7-rc.1",
+      "tag": "dsh-v0.1.7-rc.1",
+      "published": "2026-09-23T13:30:24Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "dcd66d28686987ed00f375ff513bd8de7ec8b8ec"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "5f633619ff3f5d0a27578ae241af8fdab5061272"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "baca4ec56f025421ddaa18b5b6174b0dc3b9b5ca"
+        }
+      ]
+    },
+    {
+      "version": "0.1.7-alpha.2",
+      "tag": "dsh-v0.1.7-alpha.2",
+      "published": "2026-09-22T15:49:49Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "dcd66d28686987ed00f375ff513bd8de7ec8b8ec"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "5f633619ff3f5d0a27578ae241af8fdab5061272"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "baca4ec56f025421ddaa18b5b6174b0dc3b9b5ca"
+        }
+      ]
+    },
+    {
+      "version": "0.1.7-alpha.1",
+      "tag": "dsh-v0.1.7-alpha.1",
+      "published": "2026-09-22T06:16:27Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-alpha.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "dcd66d28686987ed00f375ff513bd8de7ec8b8ec"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "5f633619ff3f5d0a27578ae241af8fdab5061272"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "87275e87d0e26522fdb3f0a22bb62c2f72030d8c"
+        }
+      ]
+    },
+    {
+      "version": "0.1.6-alpha.2",
+      "tag": "dsh-v0.1.6-alpha.2",
+      "published": "2026-09-17T13:30:16Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "d77aa7f04224f5d29e04110eaff01cd6d0bd7bab"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "e17e2011e7e167fa13991419428157de8909e508"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "6be7be61e257cd9e38c8a3122298316bf3df9892"
+        }
+      ]
+    },
+    {
+      "version": "0.1.6-alpha.1",
+      "tag": "dsh-v0.1.6-alpha.1",
+      "published": "2026-09-15T04:57:57Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/created",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2118507b8cc617a920e7ceae9f98d06daa2d4780"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "eaa4e0462a0097f37606e34fb964be0728a9d1cd"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "bc5b5d6eb3f4215c2354bfa982ff22cae3e9cfbf"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "6be7be61e257cd9e38c8a3122298316bf3df9892"
+        }
+      ]
+    },
+    {
+      "version": "0.1.5-rc.2",
+      "tag": "dsh-v0.1.5-rc.2",
+      "published": "2026-09-10T15:09:34Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-rc.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "31338e8d8da6ccb2e99fd459abbe2238bf5c1736"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "bfddde7fc4b2a08144e2f76f8ca59e61a2b4e37f"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "367688c0d179a1bad9bd14ef3eb964511e2a211b"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "bef11baf263984b40e0f040505068cf4f7440c93"
+        }
+      ]
+    },
+    {
+      "version": "0.1.5-rc.1",
+      "tag": "dsh-v0.1.5-rc.1",
+      "published": "2026-09-10T03:09:00Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "31338e8d8da6ccb2e99fd459abbe2238bf5c1736"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "bfddde7fc4b2a08144e2f76f8ca59e61a2b4e37f"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "367688c0d179a1bad9bd14ef3eb964511e2a211b"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "bef11baf263984b40e0f040505068cf4f7440c93"
+        }
+      ]
+    },
+    {
+      "version": "0.1.5-alpha.2",
+      "tag": "dsh-v0.1.5-alpha.2",
+      "published": "2026-09-09T14:23:10Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "31338e8d8da6ccb2e99fd459abbe2238bf5c1736"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "bfddde7fc4b2a08144e2f76f8ca59e61a2b4e37f"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "367688c0d179a1bad9bd14ef3eb964511e2a211b"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "bef11baf263984b40e0f040505068cf4f7440c93"
+        }
+      ]
+    },
+    {
+      "version": "0.1.5-alpha.1",
+      "tag": "dsh-v0.1.5-alpha.1",
+      "published": "2026-09-08T16:16:04Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-alpha.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "31338e8d8da6ccb2e99fd459abbe2238bf5c1736"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "65ec2e44df5eba2725a96e83bbe241d61cf1b39a"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "367688c0d179a1bad9bd14ef3eb964511e2a211b"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "bef11baf263984b40e0f040505068cf4f7440c93"
+        }
+      ]
+    },
+    {
+      "version": "0.1.3-alpha.2",
+      "tag": "dsh-v0.1.3-alpha.2",
+      "published": "2026-09-07T13:59:29Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2b6931b257bcd18d0918f141cb66ec1a774d484f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "c480f57b892b3fdea8eb210b5807e24f07bd35bb"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "6a3cc5de71d96c9bf5da27ca704519dbf07f75ed"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "080722a254d0d41eb8792968aac46b607f9c50ee"
+        }
+      ]
+    },
+    {
+      "version": "0.1.3-alpha.1",
+      "tag": "dsh-v0.1.3-alpha.1",
+      "published": "2026-09-04T11:34:32Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": true,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "live-frames",
+      "sourceAudit": "reviewed",
+      "hostTest": "unavailable",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "2b6931b257bcd18d0918f141cb66ec1a774d484f"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "c480f57b892b3fdea8eb210b5807e24f07bd35bb"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "6a3cc5de71d96c9bf5da27ca704519dbf07f75ed"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "6c1711df30bbee3743a04cd5db1d69b21e2dcb39"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2-rc.1",
+      "tag": "dsh-v0.1.2-rc.1",
+      "published": "2026-09-03T06:06:07Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "c8bc08ecbbde72b6608cc4ecb292b579d6e4493d"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "43035388928a1e6c7ca1268889b3d27c2f20232a"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "cdecc4c96efa65c39ae9e791641b4f89e0657e13"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "6c1711df30bbee3743a04cd5db1d69b21e2dcb39"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2-alpha.5",
+      "tag": "dsh-v0.1.2-alpha.5",
+      "published": "2026-09-02T10:02:56Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.5",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "c8bc08ecbbde72b6608cc4ecb292b579d6e4493d"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "43035388928a1e6c7ca1268889b3d27c2f20232a"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "cdecc4c96efa65c39ae9e791641b4f89e0657e13"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "6c1711df30bbee3743a04cd5db1d69b21e2dcb39"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2-alpha.4",
+      "tag": "dsh-v0.1.2-alpha.4",
+      "published": "2026-09-01T15:45:07Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.4",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "c8bc08ecbbde72b6608cc4ecb292b579d6e4493d"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "43035388928a1e6c7ca1268889b3d27c2f20232a"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "cdecc4c96efa65c39ae9e791641b4f89e0657e13"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "6c1711df30bbee3743a04cd5db1d69b21e2dcb39"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2-alpha.3",
+      "tag": "dsh-v0.1.2-alpha.3",
+      "published": "2026-08-31T16:03:39Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.3",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "c8bc08ecbbde72b6608cc4ecb292b579d6e4493d"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "43035388928a1e6c7ca1268889b3d27c2f20232a"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "cdecc4c96efa65c39ae9e791641b4f89e0657e13"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "1e6d7c3bab080c3189681c8fd08d362632e5b7eb"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2-alpha.2",
+      "tag": "dsh-v0.1.2-alpha.2",
+      "published": "2026-08-30T13:52:14Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "c8bc08ecbbde72b6608cc4ecb292b579d6e4493d"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "43035388928a1e6c7ca1268889b3d27c2f20232a"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "cdecc4c96efa65c39ae9e791641b4f89e0657e13"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "1e6d7c3bab080c3189681c8fd08d362632e5b7eb"
+        }
+      ]
+    },
+    {
+      "version": "0.1.2-alpha.1",
+      "tag": "dsh-v0.1.2-alpha.1",
+      "published": "2026-08-27T17:06:37Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "unavailable",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "c8bc08ecbbde72b6608cc4ecb292b579d6e4493d"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "438fcaa67baed51a6b1c8f867e802d2a6aa46023"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "37b6795a13f7aced13d542d7765c6bb2c677c62d"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "9513fe0a3c4ac1099b42514c9d4ed4ef2042a631"
+        }
+      ]
+    },
+    {
+      "version": "0.1.1-rc.2",
+      "tag": "dsh-v0.1.1-rc.2",
+      "published": "2026-08-21T12:35:08Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.1-rc.2",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "7d713f8c77112f8e74150bc060ec677bb5107f90"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8c5be187dd3ced8bbf1ddc7a6830a2b5d3ae0c20"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "82b64bf4ce863875c1788bdb0ce1e26af570d743"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "377015feb3c329207f540046beadb08208b6c920"
+        }
+      ]
+    },
+    {
+      "version": "0.1.1-rc.1",
+      "tag": "dsh-v0.1.1-rc.1",
+      "published": "2026-08-21T07:12:39Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.1-rc.1",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "7d713f8c77112f8e74150bc060ec677bb5107f90"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8c5be187dd3ced8bbf1ddc7a6830a2b5d3ae0c20"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "e87c428d060305e416747adac386058d24d8e37d"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "377015feb3c329207f540046beadb08208b6c920"
+        }
+      ]
+    },
+    {
+      "version": "0.1.0-rc.8",
+      "tag": "dsh-v0.1.0-rc.8",
+      "published": "2026-08-19T15:37:57Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.0-rc.8",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "7d713f8c77112f8e74150bc060ec677bb5107f90"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8c5be187dd3ced8bbf1ddc7a6830a2b5d3ae0c20"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "e87c428d060305e416747adac386058d24d8e37d"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "377015feb3c329207f540046beadb08208b6c920"
+        }
+      ]
+    },
+    {
+      "version": "0.1.0-rc.7",
+      "tag": "dsh-v0.1.0-rc.7",
+      "published": "2026-08-17T12:01:58Z",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.0-rc.7",
+      "features": {
+        "stream": true,
+        "reasoningDelta": true,
+        "textDelta": true,
+        "blockEnd": true,
+        "toolResult": true,
+        "toolPreExecute": true,
+        "cancel": true,
+        "followup": true,
+        "preStep": true,
+        "assistantStream": false,
+        "lifecycle": "agent/session-start",
+        "modelSelection": false
+      },
+      "adapter": "stream-waterfall",
+      "sourceAudit": "reviewed",
+      "hostTest": "passed",
+      "sources": [
+        {
+          "path": "packages/core/agent/src/runtime-types.ts",
+          "sha": "7d713f8c77112f8e74150bc060ec677bb5107f90"
+        },
+        {
+          "path": "packages/llm/llm/src/types.ts",
+          "sha": "8c5be187dd3ced8bbf1ddc7a6830a2b5d3ae0c20"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "sha": "e87c428d060305e416747adac386058d24d8e37d"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "sha": "377015feb3c329207f540046beadb08208b6c920"
+        }
+      ]
+    }
+  ]
+}
