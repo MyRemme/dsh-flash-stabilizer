@@ -1,4 +1,4 @@
-# DSH Flash Stabilizer 0.1.0
+# DSH Flash Stabilizer 0.1.1
 
 DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正文和重复工具结果，提供可选的有限软纠正。包内含构建产物，安装时不需要编译。
 
@@ -8,7 +8,8 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 - 排除工具参数 JSON，跳过 Markdown 代码围栏，降低重复模板代码的敏感度。
 - 对五分钟内相同工具、相同参数且结果不变的重复执行告警。结果变化会重置该指纹的计数。
 - `observe` 默认只告警；`assist` 在确认重复后等待当前回合正常结束或耗尽输出，再通过宿主 `agent.followup()` 开启独立纠正回合，每个用户任务最多两次。错误、用户停止、新用户输入、禁用会话或卸载会取消待执行的纠正，不向当前步骤注入消息。
-- 提供运行状态、会话级开关和可选的有界本地 JSONL 日志。
+- 提供原生「Flash 防空转」侧栏、插件详情面板和重复告警提示，显示监控请求数、最近监控时间、检测记录及实际纠正动作。
+- 提供暂停 / 继续、刷新、离线自检及去标识日志导出；另支持会话级开关和有界本地 JSONL 日志。
 
 插件不改写流、历史、工具参数或采样设置，不自行执行、跳过或重放工具。`assist` 会增加后续模型回合和费用；当前回合需要自行结束，纠正提示才可能生效。独立回合避免宿主保留 `max-tokens` 状态而在执行一次工具后提前停止。
 
@@ -27,12 +28,24 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 
 核心测试不等于真实 DeepSeek API、桌面端安装或真实任务效果测试。插件自身要求 Node.js >=22.18.0，同时必须满足所用 DSH 版本自身的 Node.js 要求；当前全部测试在 Windows / Node.js 24.20.0 上运行。
 
+## 查看是否生效
+
+在侧栏打开 **Flash 防空转**，或进入 **插件 → dsh-flash-stabilizer → 配置**。新增前端模块后可能需要刷新 Harness 页面。
+
+- 「监控在线」表示服务已连接并启用；「已监控请求」及「最近监控请求」在实际匹配的 Flash 请求开始消费时更新。
+- 检测确认后显示界内告警和记录；纠正意图、已提交及预算耗尽分别标注。「已提交纠正」是累计提交数，不代表恢复成功。
+- 「暂停监控」不会停止模型或工具，只撤销待执行纠正并停止监控；恢复从下一次请求开始。暂停状态在插件重载后重置。
+- 「离线自检」只用内存样本检测，不调用模型、不修改会话、不计入真实告警。
+- 「导出诊断日志」导出最近 100 条内存事件及累计统计，默认无需开启磁盘日志。插件重载会清空内存记录；磁盘日志开关及写入故障会在面板显示。
+
+界面使用 Harness 原生插槽和已认证连接。35 版本核心宿主测试不等于所有版本的界面测试；旧版没有对应界面或连接服务时，后台监控可独立运行。
+
 ## 安装与卸载
 
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.0.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.1.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -42,7 +55,7 @@ dsh --profile desktop --dump-config
 dsh plugin --profile desktop remove dsh-flash-stabilizer
 ```
 
-安装包保存在本地，源码保存在私有 GitHub 仓库；未发布到 npm 或 GitHub Releases，也未修改现有 DSH 安装或 profile。安装方式依据 [官方插件打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/docs/user/develop/basic/publish.zh.md)。
+安装包保存在本地，源码保存在私有 GitHub 仓库，未发布到 npm 或 GitHub Releases。安装方式依据 [官方插件打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/docs/user/develop/basic/publish.zh.md)。
 
 ## 配置
 
@@ -92,11 +105,11 @@ ctx.flashStabilizer.setSessionEnabled(sessionId, false)
 ctx.flashStabilizer.setSessionEnabled(sessionId, true)
 ```
 
-`status()` 返回兼容性、实际模式、会话数量和累计事件计数。`recovery` 计数包含暂存纠正意图、提交后续回合和预算耗尽等事件，不能作为恢复成功率。
+`status()` 返回兼容性、实际模式、监控请求计数、会话数量、去标识最近记录和日志状态。`recovery` 事件计数包含暂存纠正意图、提交后续回合和预算耗尽等事件，不能作为恢复成功率。
 
 ## 日志与误告警
 
-默认只在宿主日志中给出高风险告警，不持久保存输出内容。启用 `logDir` 后最多保留 `events.jsonl`、`events.previous.jsonl` 两个文件；队列有上限，拥塞时丢弃诊断事件，I/O 错误会停写并保留宿主运行。
+默认在面板保留最近 100 条去标识诊断事件，同时在宿主日志中给出高风险告警，不持久保存输出内容。启用 `logDir` 后最多保留 `events.jsonl`、`events.previous.jsonl` 两个文件；队列有上限，拥塞时丢弃诊断事件，I/O 错误会停写并保留宿主运行。
 
 日志只含事件类型、时间、风险分数、字符数、周期、重复次数、动作及截短的会话 ID 哈希，不含原始推理、正文、命令、参数、错误或凭据。哈希是去标识措施，不是加密或完全匿名化。内存计数及会话跟踪会在重载后清空。
 
@@ -111,10 +124,10 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.0.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.1.tgz
 ```
 
-`npm run check` 包含类型检查、构建及 112 项自动化测试。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
+`npm run check` 包含类型检查、构建及 121 项自动化测试，包含真实 React / DOM 中的面板交互及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
 
 上述自动化和兼容性测试使用确定性输出，不需要 API Key。源码在 `src/`，测试在 `tests/`，审查报告在 [FEASIBILITY_REVIEW.zh-CN.md](FEASIBILITY_REVIEW.zh-CN.md)，每版本接口来源及 SHA 在 `compatibility/releases.json`。
 

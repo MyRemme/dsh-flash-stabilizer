@@ -4,13 +4,20 @@ import { StreamMonitor } from './monitor.js';
 import { ProgressGuard } from './progress.js';
 import { MetricsStore } from './metrics.js';
 import { RecoveryController } from './recovery.js';
+import { registerUI } from './ui-bridge.js';
 import type { Agent, Chunk, HostContext, Notice, RequestOptions, StepPayload, ToolExecution, ToolResult } from './types.js';
 
 export { Config };
 export const name = 'flash-stabilizer';
 export const inject = ['agents', 'llm', 'tools'];
 export interface StabilizerAPI {
-  status(): { compatibility: ReturnType<typeof compatibilityFor>; mode: Settings['mode']; sessions: number; counts: Record<string, number> };
+  status(): {
+    compatibility: ReturnType<typeof compatibilityFor>; mode: Settings['mode']; sessions: number; counts: Record<string, number>;
+    monitoring: boolean; startedAt: string; monitoredRequests: number; finishedRequests: number; activeRequests: number; lastMonitoredAt: string | null;
+    confirmed: number; recoverySubmitted: number; events: ReturnType<MetricsStore['snapshot']>['events']; logging: ReturnType<MetricsStore['snapshot']>['logging'];
+  };
+  setMonitoring(enabled: boolean): void;
+  selfTest(): { passed: boolean; scope: 'offline-detector-only'; modelRequests: 0 };
   setSessionEnabled(sessionId: string, enabled: boolean): void;
 }
 interface SessionState {
@@ -31,13 +38,17 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const states = new Map<string, SessionState>();
   const disabledSessions = new Set<string>(config.disabledSessions);
   let disposed = false;
+  let monitoring = true;
+  const startedAt = new Date().toISOString();
+  let monitoredRequests = 0, finishedRequests = 0;
+  let lastMonitoredAt: string | null = null;
   const warn = (message: string) => { try { ctx.logger?.warn(message); } catch { /* Logging is optional. */ } };
   const metrics = new MetricsStore(config.logDir, config.maxLogBytes, () => warn('flash-stabilizer: diagnostic logging disabled after an I/O error'));
   const report = (event: Notice) => {
     metrics.record(event);
     if (event.kind !== 'recovery' && event.score < 70) return;
     warn(config.language === 'zh'
-      ? `Flash Stabilizer：${event.kind}，风险 ${event.score}，动作 ${event.action ?? 'observe'}；详情通过 flashStabilizer.status() 查看。`
+      ? `Flash Stabilizer：${event.kind}，风险分数 ${event.score}，动作 ${event.action ?? 'observe'}；详情见「Flash 防空转」面板。`
       : `Flash Stabilizer: ${event.kind}, risk ${event.score}, action ${event.action ?? 'observe'}.`);
   };
   const recovery = new RecoveryController(config, (action, agent) => metrics.record({ kind: 'recovery', session: agent.id, score: 0, confirmed: false, chars: 0, action }));
@@ -60,7 +71,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       recovery.forget(idle.agent); states.delete(idle.agent.id);
     }
     const enabled = !disabledSessions.has(agent.id);
-    recovery.setEnabled(agent, enabled);
+    recovery.setEnabled(agent, enabled && monitoring);
     state = { agent, turn: 0, step: 0, progress: new ProgressGuard(config.toolRepeatLimit), enabled, noticeKeys: new Set() };
     states.set(agent.id, state);
     return state;
@@ -87,11 +98,12 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     // Delegate exactly once, outside our error containment: host failures remain authoritative.
     const upstream = next();
     const state = options.sessionId ? states.get(options.sessionId) : undefined;
-    if (disposed || !state?.enabled || !selected(options) || options.purpose || !options.signal || options.signal !== state.signal) return upstream;
+    if (disposed || !monitoring || !state?.enabled || !selected(options) || options.purpose || !options.signal || options.signal !== state.signal) return upstream;
     return (async function* () {
       const signal = options.signal!;
       let active = false;
       guarded(() => {
+        if (!monitoring || !state.enabled) return;
         const monitor = new StreamMonitor(config, evidence => {
           const key = evidence.confirmed ? 'confirmed' : 'suspected';
           if (!state.noticeKeys.has(key)) {
@@ -103,13 +115,14 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
         state.noticeKeys.clear();
         state.request = { monitor, signal, ...(state.frameId ? { frameId: state.frameId } : {}) };
         active = true;
+        monitoredRequests++; lastMonitoredAt = new Date().toISOString();
       });
       try {
         for await (const chunk of upstream) {
           if (compatibility.adapter === 'stream-waterfall' && active) guarded(() => state.request?.monitor.push(chunk));
           yield chunk;
         }
-      } finally { if (active) delete state.request; }
+      } finally { if (active) { finishedRequests++; delete state.request; } }
     })();
   });
 
@@ -124,7 +137,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   ctx.on('tools/result', (exec: ToolExecution, result: ToolResult) => guarded(() => {
     if (!exec.agent) return;
     const state = states.get(exec.agent.id);
-    if (!state?.enabled || state.agent !== exec.agent) return;
+    if (!monitoring || !state?.enabled || state.agent !== exec.agent) return;
     const route = exec.agent.model?.current() ?? exec.agent.options;
     if (!selected(route ?? {})) return;
     const evidence = state.progress.record(exec, result);
@@ -151,17 +164,36 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     recovery.forget(agent);
   }));
   const api: StabilizerAPI = {
-    status: () => ({ compatibility: { ...compatibility }, mode: effectiveMode, sessions: states.size, counts: { ...metrics.counts } }),
+    status: () => ({
+      compatibility: { ...compatibility }, mode: effectiveMode, sessions: states.size, counts: { ...metrics.counts },
+      monitoring: monitoring && !disposed, startedAt, monitoredRequests, finishedRequests,
+      activeRequests: [...states.values()].filter(state => state.request).length,
+      lastMonitoredAt, ...metrics.snapshot(),
+    }),
+    setMonitoring: enabled => guarded(() => {
+      monitoring = enabled;
+      for (const state of states.values()) {
+        if (!enabled) delete state.request;
+        recovery.setEnabled(state.agent, enabled && state.enabled);
+      }
+    }),
+    selfTest: () => {
+      let passed = false;
+      const monitor = new StreamMonitor(config, evidence => { if (evidence.confirmed) passed = true; });
+      monitor.push({ type: 'reasoning-delta', index: 0, text: '好。执行。好。'.repeat(Math.ceil(config.windowChars * 3 / 7)) });
+      return { passed, scope: 'offline-detector-only', modelRequests: 0 };
+    },
     setSessionEnabled: (sessionId, enabled) => guarded(() => {
       if (enabled) disabledSessions.delete(sessionId); else disabledSessions.add(sessionId);
       const agent = states.get(sessionId)?.agent ?? ctx.agents?.get(sessionId);
       if (!agent) return;
       const state = stateFor(agent); state.enabled = enabled;
       if (!enabled) delete state.request;
-      recovery.setEnabled(agent, enabled);
+      recovery.setEnabled(agent, enabled && monitoring);
     }),
   };
   ctx.provide?.('flashStabilizer', api);
+  registerUI(ctx, api);
   if (config.mode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过自动干预验证，已使用观察模式。' : 'Flash Stabilizer: automatic intervention is not verified; using observation mode.');
   metrics.record({ kind: 'compatibility', session: '', score: 0, confirmed: false, chars: 0, action: compatibility.reason });
   try { ctx.logger?.info(`flash-stabilizer: DSH ${compatibility.version}; ${compatibility.adapter}; ${effectiveMode}; ${compatibility.reason}`); } catch { /* Optional logger. */ }

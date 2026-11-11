@@ -31,10 +31,16 @@ export interface HostContext {
   on(name: string, listener: (...args: any[]) => any): () => void;
   effect(effect: () => (() => void | Promise<void>), label?: string): unknown;
   get?(name: string): unknown;
+  inject?(names: string[], callback: (ctx: HostContext & { connection?: ConnectionService }) => void): unknown;
   provide?(name: string, value: unknown): unknown;
   logger?: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
   agents?: { get(id: string): Agent | undefined };
 }
+export interface ConnectionService {
+  rpc: { handle(channel: string, handler: RpcHandler): unknown };
+  register?(owner: HostContext, channel: string, handler: RpcHandler): unknown;
+}
+export type RpcHandler = (endpoint: string, payload: unknown, signal: AbortSignal, peer: { principal?: { kind?: string } }) => unknown;
 export interface Notice {
   kind: 'stream-repeat' | 'tool-repeat' | 'test-repeat' | 'recovery' | 'compatibility' | 'internal-error';
   session: string; score: number; confirmed: boolean; chars: number;

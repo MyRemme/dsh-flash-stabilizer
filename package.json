@@ -1,6 +1,6 @@
 {
   "name": "dsh-flash-stabilizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH Flash 推理重复监控、工具重复告警与有限软纠正插件",
   "type": "module",
   "license": "MIT",
@@ -15,10 +15,12 @@
       "types": "./dist/core.d.ts",
       "default": "./dist/core.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./client/client.js"
   },
   "files": [
     "dist",
+    "client",
     "compatibility",
     "cordis.patch.yml",
     "README.md",
@@ -33,6 +35,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ],
+      "platform": "web"
     }
   },
   "scripts": {
@@ -59,6 +70,9 @@
     "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
     "@types/node": "^24.0.0",
+    "jsdom": "^31.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "typescript": "7.0.2",
     "vitest": "5.1.0"
   },

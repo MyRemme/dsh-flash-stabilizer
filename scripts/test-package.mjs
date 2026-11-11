@@ -6,13 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL('../', import.meta.url));
-const artifact = resolve(process.argv[2] ?? join(root, 'artifacts/dsh-flash-stabilizer-0.1.0.tgz'));
+const artifact = resolve(process.argv[2] ?? join(root, 'artifacts/dsh-flash-stabilizer-0.1.1.tgz'));
 const matrix = JSON.parse(await readFile(join(root, 'compatibility/releases.json'), 'utf8'));
 const old = JSON.parse(await readFile(join(root, 'compatibility/host-results.json'), 'utf8'));
 const listing = (await exec('tar', ['-tzf', artifact], { windowsHide: true })).stdout.trim().split(/\r?\n/);
 assert.ok(listing.length > 0);
 assert.ok(listing.every(p => p.startsWith('package/') && !p.split('/').includes('..') && !p.includes('\\')), 'safe archive paths');
-for (const required of ['package/dist/index.js', 'package/cordis.patch.yml', 'package/README.md', 'package/compatibility/releases.json']) assert.ok(listing.includes(required), required);
+for (const required of ['package/dist/index.js', 'package/client/client.js', 'package/cordis.patch.yml', 'package/README.md', 'package/compatibility/releases.json']) assert.ok(listing.includes(required), required);
 assert.ok(!listing.some(p => /(?:^|\/)(?:node_modules|\.npm-cache|\.compat-cache)(?:\/|$)/.test(p)), 'no development dependencies or caches');
 const results = []; let cursor = 0;
 await Promise.all(Array.from({ length: 3 }, async () => {

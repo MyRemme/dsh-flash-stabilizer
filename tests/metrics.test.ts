@@ -32,5 +32,20 @@ it('contains logging failure without retrying indefinitely', async () => {
     metrics.record({ kind: 'internal-error', session: '', score: 0, confirmed: false, chars: 0 });
     await metrics.close();
     expect(warn).toHaveBeenCalledTimes(1);
+    expect(metrics.snapshot().logging).toMatchObject({ enabled: true, healthy: false });
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+it('bounds and clones UI history while keeping lifetime totals and stripping unexpected fields', async () => {
+  const metrics = new MetricsStore('', 4096, () => {});
+  for (let i = 0; i < 120; i++) {
+    metrics.record({ kind: 'recovery', session: 'private', score: 0, confirmed: false, chars: 0, action: 'recovery-submitted', ...{ raw: 'secret' } });
+  }
+  const snapshot = metrics.snapshot();
+  expect(snapshot.recoverySubmitted).toBe(120);
+  expect(snapshot.events).toHaveLength(100);
+  expect(snapshot.logging.enabled).toBe(false);
+  expect(JSON.stringify(snapshot)).not.toMatch(/private|secret/);
+  snapshot.events[0]!.action = 'changed';
+  expect(metrics.snapshot().events[0]!.action).toBe('recovery-submitted');
+  await metrics.close();
 });
