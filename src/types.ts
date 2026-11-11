@@ -46,4 +46,5 @@ export interface Notice {
   session: string; score: number; confirmed: boolean; chars: number;
   period?: number; repeats?: number; action?: string;
   contentType?: 'reasoning' | 'text'; turn?: number; step?: number;
+  coverage?: number; novelty?: number;
 }

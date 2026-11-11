@@ -1,10 +1,10 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { apply, type StabilizerAPI } from '../src/index.js';
 import type { ConnectionService, HostContext } from '../src/types.js';
 import { FakeHost, chunks, makeAgent, repeated, stream } from './helpers.js';
 
 const hosts: FakeHost[] = [];
-afterEach(async () => { for (const host of hosts.splice(0)) await host.close(); });
+afterEach(async () => { for (const host of hosts.splice(0)) await host.close(); vi.useRealTimers(); });
 function setup() {
   const host = new FakeHost(); hosts.push(host);
   let handler: Parameters<ConnectionService['rpc']['handle']>[1];
@@ -25,6 +25,49 @@ it('requires an owner and validates every UI operation before changing state', (
   expect(call('unknown').error?.code).toBe('NOT_FOUND');
   expect(call('setMonitoring', { enabled: false }, 'owner', AbortSignal.abort()).error?.code).toBe('ABORTED');
   expect(call('setMonitoring', { enabled: false }).value.monitoring).toBe(false);
+});
+it('limits raw conversation navigation ids to the owner UI endpoint and keeps export redacted', async () => {
+  const { host, call } = setup();
+  expect(call('conversations', {}, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('conversations', { extra: true }).error?.code).toBe('BAD_REQUEST');
+  const agent = makeAgent('private-ui-navigation');
+  await stream(host, agent, chunks(repeated), false);
+  const list = call('conversations').value;
+  expect(list).toHaveLength(1);
+  expect(list[0]).toMatchObject({ sessionId: 'private-ui-navigation', tracked: true, turn: 1, step: 1, confirmed: 1 });
+  const event = list[0].events.find((e: { confirmed: boolean }) => e.confirmed);
+  expect(event.session).toBe(list[0].sessionKey);
+  expect(event.coverage).toBeGreaterThanOrEqual(0.85);
+  expect(event.novelty).toBeLessThanOrEqual(0.15);
+  host.emit('agent/disposed', { agent });
+  expect(call('conversations').value[0]).toMatchObject({ sessionId: agent.id, tracked: false });
+  expect(JSON.stringify(call('export').value)).not.toContain('private-ui-navigation');
+  expect(JSON.stringify(call('snapshot').value)).not.toContain('private-ui-navigation');
+});
+it('streams per-request activity without treating silence, short output or interruption as clean detection', async () => {
+  vi.useFakeTimers();
+  const { host, api } = setup(), agent = makeAgent('live'), controller = new AbortController();
+  host.emit('agent/pre-step', { agent, turn: 8, step: 3, signal: controller.signal, messages: [] }, () => Promise.resolve());
+  async function* upstream() {
+    yield { type: 'reasoning-delta', index: 0, text: '正在检查。' };
+    yield { type: 'reasoning-delta', index: 0, text: Array.from({ length: 200 }, (_, i) => `Changed evidence ${i} excludes ${i * i}; continue module ${i + 1}.`).join(' ') };
+    yield { type: 'reasoning-delta', index: 0, text: repeated };
+    yield { type: 'finish' };
+  }
+  const iterator = host.waterfall('llm/stream', [{ sessionId: 'live', model: 'deepseek-flash', signal: controller.signal }], () => upstream())[Symbol.asyncIterator]();
+  await iterator.next();
+  expect(api.sessionStatus('live').live).toMatchObject({ risk: 'collecting', active: true, turn: 8, step: 3, checks: 0 });
+  vi.advanceTimersByTime(31000);
+  expect(api.sessionStatus('live').live?.silentForMs).toBe(31000);
+  await iterator.next();
+  expect(api.sessionStatus('live').live).toMatchObject({ risk: 'clear', active: true, silentForMs: 0 });
+  expect(api.sessionStatus('live').live!.checks).toBeGreaterThan(0);
+  await iterator.next();
+  expect(api.sessionStatus('live').live?.risk).toBe('confirmed');
+  const before = api.sessionStatus('live').live!;
+  api.setMonitoring(false); api.setMonitoring(true);
+  await iterator.next(); await iterator.next();
+  expect(api.sessionStatus('live')).toMatchObject({ coverage: 'unavailable', live: { active: false, checks: before.checks } });
 });
 it('shows actual monitored requests, redacts diagnostics and isolates offline self-test', async () => {
   const { host, api, call } = setup();

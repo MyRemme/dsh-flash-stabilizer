@@ -19,7 +19,7 @@ beforeEach(() => {
   cleanup = [];
 });
 afterEach(async () => { await act(async () => { root.unmount(); for (const fn of cleanup) fn(); }); dom.window.close(); vi.useRealTimers(); vi.unstubAllGlobals(); });
-async function mount(call, sessionId) {
+async function mount(call, sessionId, services = {}) {
   let plugin;
   const slots = [];
   const url = { createObjectURL: vi.fn(() => 'blob:diagnostic'), revokeObjectURL: vi.fn() };
@@ -37,7 +37,7 @@ async function mount(call, sessionId) {
   });
   const selectPanel = vi.fn();
   await act(async () => {
-    plugin.apply({ connection: { rpc: { call } }, layout: { selectPanel }, effect: fn => cleanup.push(fn()),
+    plugin.apply({ connection: { rpc: { call } }, layout: { selectPanel }, get: name => services[name], effect: fn => cleanup.push(fn()),
       slots: { inject: (_name, fn) => fn(), register: (meta, component) => slots.push({ meta, component }) } });
     const Panel = slots.find(s => s.meta.name === 'main').component;
     const Toast = slots.find(s => s.meta.name === 'shell.overlay').component;
@@ -69,6 +69,53 @@ it('registers discoverable native entries and renders actual monitoring state wi
   expect(document.body.textContent).toContain('未调用模型，未计入真实告警');
   expect(data.confirmed).toBe(0);
 });
+it('identifies conversations and turns, filters incidents and opens the native conversation without exporting titles', async () => {
+  const openSession = vi.fn();
+  const incident = { kind: 'stream-repeat', contentType: 'reasoning', confirmed: true, score: 98, chars: 4000,
+    session: 'key-a', period: 21, repeats: 64, coverage: 0.98, novelty: 0.01, turn: 7, step: 3, time: '2026-11-11T11:01:00Z' };
+  const data = { ...baseline(), confirmed: 1, events: [incident, { ...incident, session: 'key-b', turn: 2 }] };
+  const items = ['a', 'b'].map(id => ({ ...sessionData(), sessionId: id, sessionKey: 'key-' + id, turn: 7, step: 3, tracked: true }));
+  const { url } = await mount(async (_channel, method) => ({ ok: true, value: method === 'conversations' ? items : data }), undefined,
+    { sessions: { list: { getSnapshot: () => ({ byId: { a: { title: '合成迁移任务' }, b: { title: '合成解析任务' } } }) } }, uiWorkspace: { openSession } });
+  expect(document.body.textContent).toContain('合成迁移任务');
+  expect(document.body.textContent).toContain('第 7 轮 · 步骤 3');
+  expect(document.body.textContent).toContain('窗口覆盖 98%');
+  await act(async () => { button('查看此对话记录').click(); });
+  expect(document.querySelectorAll('.fs-event')).toHaveLength(1);
+  expect(document.querySelector('.fs-event').textContent).toContain('合成迁移任务');
+  await act(async () => { button('打开对话').click(); });
+  expect(openSession).toHaveBeenCalledWith('a');
+  vi.spyOn(dom.window.HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  await act(async () => { button('导出诊断日志').click(); });
+  expect(await url.createObjectURL.mock.calls[0][0].text()).not.toContain('合成迁移任务');
+});
+it('updates live health from flowing output to suspicion and confirmation, without promising prevention', async () => {
+  const live = { risk: 'clear', active: true, reasoningChars: 5800, textChars: 0, analyzedChars: 5800, checks: 12,
+    turn: 4, step: 2, silentForMs: 100, lastOutputAt: '2026-11-11T11:00:00Z', lastCheckAt: '2026-11-11T11:00:00Z' };
+  const data = { ...sessionData(), coverage: 'monitoring', live, toolResults: 3 };
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? structuredClone(data) : baseline() }), 'a');
+  expect(document.body.textContent).toContain('持续检测 · 暂未发现循环');
+  await act(async () => { document.querySelector('.fs-dock-button').click(); });
+  expect(document.body.textContent).toContain('推理 5,800 字符');
+  expect(document.body.textContent).toContain('已检查 12 次');
+  expect(document.body.textContent).toContain('工具结果 3 次');
+  expect(document.body.textContent).toContain('不能保证后续不会重复');
+  data.live.risk = 'suspected';
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(document.querySelector('.fs-dock-button').textContent).toContain('疑似重复');
+  data.live.risk = 'confirmed';
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(document.querySelector('.fs-dock-button').textContent).toContain('确认重复 · 未中断');
+});
+it.each([
+  [{ risk: 'collecting', active: true, reasoningChars: 15, textChars: 0, checks: 0, silentForMs: 100 }, '接收输出 · 积累检测样本'],
+  [{ risk: 'collecting', active: true, reasoningChars: 0, textChars: 0, checks: 0, silentForMs: 100 }, '等待模型首个输出'],
+  [{ risk: 'clear', active: true, reasoningChars: 4000, textChars: 0, checks: 3, silentForMs: 31000 }, '等待输出 · 尚不能判断'],
+  [{ risk: 'collecting', active: false, reasoningChars: 15, textChars: 0, checks: 0, silentForMs: 0 }, '请求结束 · 检测样本不足'],
+])('labels incomplete observations honestly: %s', async (live, label) => {
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? { ...sessionData(), coverage: live.active ? 'monitoring' : 'checked', live } : baseline() }), 'a');
+  expect(document.querySelector('.fs-dock-button').textContent).toContain(label);
+});
 it('shows and opens real incident alerts and exports only the host diagnostic payload', async () => {
   const data = baseline();
   data.events = [{ kind: 'stream-repeat', confirmed: true, score: 98, chars: 4000, session: 'hashed', time: '2026-11-11T11:01:00Z' }]; data.confirmed = 1;
@@ -92,6 +139,25 @@ it('marks connection failure visibly and recovers on refresh', async () => {
   fail = false;
   await act(async () => { button('刷新状态').click(); });
   expect(document.body.textContent).toContain('监控在线');
+});
+it.each(['snapshot', 'conversations'])('does not show stale live health after %s disconnects', async endpoint => {
+  let fail = false;
+  const item = { ...sessionData(), sessionId: 'a', sessionKey: 'key-a', tracked: true, coverage: 'monitoring',
+    live: { risk: 'clear', active: true, reasoningChars: 4000, textChars: 0, analyzedChars: 4000, checks: 3, silentForMs: 100 } };
+  await mount(async (_channel, method) => {
+    if (fail && method === endpoint) throw Error('offline');
+    return { ok: true, value: method === 'conversations' ? [item] : baseline() };
+  });
+  expect(document.querySelector('.fs-conversation .fs-state').textContent).toContain('暂未发现循环');
+  fail = true;
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(document.querySelector('.fs-conversation .fs-state').textContent).toContain('状态已过期');
+  expect(document.querySelector('.fs-conversation .fs-state').dataset.tone).toBe('off');
+  expect(document.body.textContent).toContain('以下为上次同步数据');
+  fail = false;
+  await act(async () => { button('刷新状态').click(); });
+  expect(document.querySelector('.fs-conversation .fs-state').textContent).toContain('暂未发现循环');
+  expect(document.body.textContent).not.toContain('以下为上次同步数据');
 });
 it('rejects a stale polling response after pause so the screen stays paused', async () => {
   let resolve;

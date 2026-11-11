@@ -6,6 +6,26 @@ import { FenceFilter } from '../src/fences.js';
 import { chunks, repeated } from './helpers.js';
 
 describe('repeat evidence', () => {
+  it('reports only content-free live counters, avoids block-end double counts, and keeps counting after confirmation', () => {
+    const monitor = new StreamMonitor(defaults, () => {});
+    const text = '好。执行。好。'.repeat(1500);
+    const input = chunks(text, 73);
+    input.forEach(chunk => monitor.push(chunk));
+    const live = monitor.snapshot();
+    expect(live).toMatchObject({ reasoningChars: text.length, textChars: 0, risk: 'confirmed' });
+    expect(live.checks).toBeGreaterThan(0);
+    expect(live.analyzedChars).toBeLessThan(text.length);
+    expect(JSON.stringify(live)).not.toContain('好。');
+    monitor.push({ type: 'text-delta', index: 1, text: 'new body' });
+    expect(monitor.snapshot()).toMatchObject({ textChars: 8, checks: live.checks, risk: 'confirmed' });
+  });
+  it('counts block-end-only output and distinguishes insufficient samples from checked prose', () => {
+    const monitor = new StreamMonitor(defaults, () => {});
+    monitor.push({ type: 'block-end', index: 0, block: { type: 'text', text: 'short answer' } });
+    expect(monitor.snapshot()).toMatchObject({ risk: 'collecting', checks: 0, textChars: 12 });
+    monitor.push({ type: 'block-end', index: 0, block: { type: 'text', text: 'short answer' } });
+    expect(monitor.snapshot().textChars).toBe(12);
+  });
   it.each([1, 7, 73, 4096, 20000])('recognizes a loop independent of delta size %i', size => {
     const events: { confirmed: boolean }[] = [];
     const monitor = new StreamMonitor(defaults, e => events.push(e));

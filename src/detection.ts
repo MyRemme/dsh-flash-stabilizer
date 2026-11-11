@@ -41,6 +41,8 @@ export class RepeatDetector {
   private previous = new Set<string>();
   private consecutive = 0;
   private lastConfirmedPeriod = 0;
+  private checks = 0;
+  stats() { return { chars: this.total, checks: this.checks }; }
   constructor(private readonly config: Settings) {}
   push(text: string): RepeatEvidence | undefined {
     this.total += text.length;
@@ -48,6 +50,7 @@ export class RepeatDetector {
     this.buffer = (this.buffer + text).slice(-this.config.windowChars);
     if (this.total < this.config.minChars || this.sinceCheck < this.config.checkEveryChars) return;
     this.sinceCheck = 0;
+    this.checks++;
     const current = grams(this.buffer.slice(-1024));
     let fresh = 0; for (const gram of current) if (!this.previous.has(gram)) fresh++;
     const novelty = this.previous.size ? fresh / Math.max(current.size, 1) : 1;

@@ -2,7 +2,7 @@ import { resolveSettings, Config, type Settings } from './config.js';
 import { compatibilityFor, detectHostVersion } from './compatibility.js';
 import { StreamMonitor } from './monitor.js';
 import { ProgressGuard } from './progress.js';
-import { MetricsStore, type DiagnosticEvent } from './metrics.js';
+import { MetricsStore, sessionKey, type DiagnosticEvent } from './metrics.js';
 import { RecoveryController } from './recovery.js';
 import { registerUI } from './ui-bridge.js';
 import type { Agent, Chunk, HostContext, Notice, RequestOptions, StepPayload, ToolExecution, ToolResult } from './types.js';
@@ -21,19 +21,25 @@ export interface StabilizerAPI {
     coverage: 'waiting' | 'monitoring' | 'checked' | 'other-model' | 'auxiliary' | 'unavailable' | 'paused' | 'disabled';
     monitoredRequests: number; activeRequests: number; confirmed: number; toolWarnings: number; recoverySubmitted: number; cancelRequested: number;
     lastMonitoredAt: string | null; latestEvent: DiagnosticEvent | null; events: ReturnType<MetricsStore['forSession']>;
+    turn: number; step: number; toolResults: number; lastToolAt: string | null;
+    live: (ReturnType<StreamMonitor['snapshot']> & { turn: number; step: number; startedAt: string; active: boolean; silentForMs: number }) | null;
   };
+  /** Owner UI only; excluded from status(), disk and export. */
+  conversations(): ({ sessionId: string; sessionKey: string; tracked: boolean } & ReturnType<StabilizerAPI['sessionStatus']>)[];
   setMonitoring(enabled: boolean): void;
   selfTest(): { passed: boolean; scope: 'offline-detector-only'; modelRequests: 0 };
   setSessionEnabled(sessionId: string, enabled: boolean): void;
 }
+interface RequestState { monitor: StreamMonitor; signal: AbortSignal; frameId?: string; turn: number; step: number; startedAt: string }
 interface SessionState {
   agent: Agent; turn: number; step: number; signal?: AbortSignal;
-  request?: { monitor: StreamMonitor; signal: AbortSignal; frameId?: string };
+  request?: RequestState; activity?: RequestState;
   frameId?: string; progress: ProgressGuard; ending?: Record<string, unknown>;
   enabled: boolean; noticeKeys: Set<string>;
   coverage: 'waiting' | 'other-model' | 'auxiliary' | 'unavailable' | 'checked';
   monitoredRequests: number; confirmed: number; toolWarnings: number; recoverySubmitted: number; cancelRequested: number; lastMonitoredAt: string | null;
   latestEvent: DiagnosticEvent | null;
+  toolResults: number; lastToolAt: string | null;
 }
 
 export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
@@ -94,7 +100,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     const enabled = !disabledSessions.has(agent.id);
     recovery.setEnabled(agent, enabled && monitoring);
     state = { agent, turn: 0, step: 0, progress: new ProgressGuard(config.toolRepeatLimit), enabled, noticeKeys: new Set(),
-      coverage: 'waiting', monitoredRequests: 0, confirmed: 0, toolWarnings: 0, recoverySubmitted: 0, cancelRequested: 0, lastMonitoredAt: null, latestEvent: null };
+      coverage: 'waiting', monitoredRequests: 0, confirmed: 0, toolWarnings: 0, recoverySubmitted: 0, cancelRequested: 0, lastMonitoredAt: null, latestEvent: null, toolResults: 0, lastToolAt: null };
     states.set(agent.id, state);
     return state;
   };
@@ -135,13 +141,15 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
           if (!state.noticeKeys.has(key)) {
             state.noticeKeys.add(key);
             report({ kind: 'stream-repeat', session: state.agent.id, score: evidence.score, confirmed: evidence.confirmed, chars: evidence.chars,
-              period: evidence.period, repeats: evidence.repeats, contentType: evidence.contentType, turn: state.turn, step: state.step });
+              period: evidence.period, repeats: evidence.repeats, coverage: evidence.coverage, novelty: evidence.novelty,
+              action: effectiveMode === 'observe' ? 'observe-only' : 'awaiting-recovery-decision', contentType: evidence.contentType, turn: state.turn, step: state.step });
           }
           if (evidence.confirmed) recovery.request(state.agent, signal, compatibility.intervention);
         });
         state.noticeKeys.clear();
         state.latestEvent = null;
-        request = { monitor, signal, ...(state.frameId ? { frameId: state.frameId } : {}) };
+        request = { monitor, signal, turn: state.turn, step: state.step, startedAt: new Date().toISOString(), ...(state.frameId ? { frameId: state.frameId } : {}) };
+        state.activity = request;
         state.request = request;
         monitoredRequests++; lastMonitoredAt = new Date().toISOString();
         state.monitoredRequests++; state.lastMonitoredAt = lastMonitoredAt; state.coverage = 'checked';
@@ -180,6 +188,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     if (!monitoring || !state?.enabled || state.agent !== exec.agent) return;
     const route = exec.agent.model?.current() ?? exec.agent.options;
     if (!selected(route ?? {})) return;
+    state.toolResults++; state.lastToolAt = new Date().toISOString();
     const evidence = state.progress.record(exec, result);
     if (evidence.repeated && evidence.count === config.toolRepeatLimit) {
       report({ kind: 'tool-repeat', session: exec.agent.id, score: evidence.failed ? 85 : 70, confirmed: false, chars: 0,
@@ -207,6 +216,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const api: StabilizerAPI = {
     sessionStatus: sessionId => {
       const state = states.get(sessionId);
+      const activity = state?.activity, live = activity?.monitor.snapshot();
       return {
         monitoring: monitoring && !disposed, mode: effectiveMode, startedAt,
         coverage: !monitoring || disposed ? 'paused' : disabledSessions.has(sessionId) ? 'disabled'
@@ -215,7 +225,15 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
         confirmed: state?.confirmed ?? 0, toolWarnings: state?.toolWarnings ?? 0,
         recoverySubmitted: state?.recoverySubmitted ?? 0, cancelRequested: state?.cancelRequested ?? 0,
         lastMonitoredAt: state?.lastMonitoredAt ?? null, latestEvent: state?.latestEvent ? { ...state.latestEvent } : null, events: metrics.forSession(sessionId),
+        turn: state?.turn ?? 0, step: state?.step ?? 0, toolResults: state?.toolResults ?? 0, lastToolAt: state?.lastToolAt ?? null,
+        live: activity && live ? { ...live, turn: activity.turn, step: activity.step, startedAt: activity.startedAt,
+          active: state.request === activity, silentForMs: state.request === activity ? Math.max(0, Date.now() - Date.parse(live.lastOutputAt ?? activity.startedAt)) : 0 } : null,
       };
+    },
+    conversations: () => {
+      const ids = new Set([...states.keys(), ...metrics.sessionReferences().map(item => item.sessionId)]);
+      return [...ids].map(sessionId => ({ sessionId, sessionKey: sessionKey(sessionId), tracked: states.has(sessionId), ...api.sessionStatus(sessionId) }))
+        .sort((a, b) => b.activeRequests - a.activeRequests || (b.lastMonitoredAt ?? '').localeCompare(a.lastMonitoredAt ?? ''));
     },
     status: () => ({
       compatibility: { ...compatibility }, mode: effectiveMode, sessions: states.size, counts: { ...metrics.counts },

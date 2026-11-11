@@ -24,6 +24,7 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI): unknown {
         return { ok: true, value: api.status() };
       }
       if (keys.length) return fail('BAD_REQUEST', 'Expected empty payload');
+      if (endpoint === 'conversations') return { ok: true, value: api.conversations() };
       if (endpoint === 'snapshot') return { ok: true, value: api.status() };
       if (endpoint === 'export') return { ok: true, value: { schemaVersion: 1, exportedAt: new Date().toISOString(), ...api.status() } };
       if (endpoint === 'selfTest') return { ok: true, value: api.selfTest() };

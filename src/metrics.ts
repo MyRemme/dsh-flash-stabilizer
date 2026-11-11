@@ -4,11 +4,15 @@ import { join } from 'node:path';
 import type { Notice } from './types.js';
 
 export interface DiagnosticEvent extends Notice { time: string }
+export const sessionKey = (id: string) => createHash('sha256').update(id).digest('hex').slice(0, 16);
 
 export class MetricsStore {
   readonly counts: Record<string, number> = Object.create(null);
   private pending: DiagnosticEvent[] = [];
   private recent: DiagnosticEvent[] = [];
+  // UI navigation references stay in memory, never in snapshot/export/disk.
+  private references = new Map<string, string>();
+  sessionReferences() { return [...this.references].map(([sessionKey, sessionId]) => ({ sessionKey, sessionId })); }
   private confirmed = 0;
   private recoverySubmitted = 0;
   private draining: Promise<void> | undefined;
@@ -24,7 +28,7 @@ export class MetricsStore {
     // arbitrary properties from a caller into diagnostics.
     const safe: DiagnosticEvent = {
       time: new Date().toISOString(), kind: event.kind,
-      session: event.session ? createHash('sha256').update(event.session).digest('hex').slice(0, 16) : '',
+      session: event.session ? sessionKey(event.session) : '',
       score: event.score, confirmed: event.confirmed, chars: event.chars,
       ...(event.period === undefined ? {} : { period: event.period }),
       ...(event.repeats === undefined ? {} : { repeats: event.repeats }),
@@ -32,9 +36,15 @@ export class MetricsStore {
       ...(event.contentType === undefined ? {} : { contentType: event.contentType }),
       ...(event.turn === undefined ? {} : { turn: event.turn }),
       ...(event.step === undefined ? {} : { step: event.step }),
+      ...(event.coverage === undefined ? {} : { coverage: event.coverage }),
+      ...(event.novelty === undefined ? {} : { novelty: event.novelty }),
     };
     this.recent.push(safe);
-    if (this.recent.length > 100) this.recent.shift();
+    if (event.session) this.references.set(safe.session, event.session);
+    if (this.recent.length > 100) {
+      const removed = this.recent.shift()!;
+      if (!this.recent.some(item => item.session === removed.session)) this.references.delete(removed.session);
+    }
     if (!this.directory || this.failed) return { ...safe };
     if (this.pending.length >= 128) { this.counts.dropped = (this.counts.dropped ?? 0) + 1; return { ...safe }; }
     // No raw content, argument, command, error text, or session id reaches disk.
@@ -78,7 +88,7 @@ export class MetricsStore {
     };
   }
   forSession(sessionId: string): DiagnosticEvent[] {
-    const hash = createHash('sha256').update(sessionId).digest('hex').slice(0, 16);
+    const hash = sessionKey(sessionId);
     return this.recent.filter(event => event.session === hash).map(event => ({ ...event })).reverse();
   }
   async close(): Promise<void> { this.closed = true; await this.draining; }
