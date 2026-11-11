@@ -12,6 +12,11 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI): unknown {
       if (signal.aborted) return fail('ABORTED', 'Request cancelled');
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return fail('BAD_REQUEST', 'Invalid payload');
       const keys = Object.keys(payload);
+      if (endpoint === 'session') {
+        const sessionId = (payload as { sessionId?: unknown }).sessionId;
+        if (keys.length !== 1 || typeof sessionId !== 'string' || !sessionId.trim() || sessionId.length > 1024) return fail('BAD_REQUEST', 'Expected sessionId string');
+        return { ok: true, value: api.sessionStatus(sessionId) };
+      }
       if (endpoint === 'setMonitoring') {
         const enabled = (payload as { enabled?: unknown }).enabled;
         if (keys.length !== 1 || typeof enabled !== 'boolean') return fail('BAD_REQUEST', 'Expected enabled boolean');

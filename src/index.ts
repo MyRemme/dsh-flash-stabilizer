@@ -2,7 +2,7 @@ import { resolveSettings, Config, type Settings } from './config.js';
 import { compatibilityFor, detectHostVersion } from './compatibility.js';
 import { StreamMonitor } from './monitor.js';
 import { ProgressGuard } from './progress.js';
-import { MetricsStore } from './metrics.js';
+import { MetricsStore, type DiagnosticEvent } from './metrics.js';
 import { RecoveryController } from './recovery.js';
 import { registerUI } from './ui-bridge.js';
 import type { Agent, Chunk, HostContext, Notice, RequestOptions, StepPayload, ToolExecution, ToolResult } from './types.js';
@@ -16,6 +16,12 @@ export interface StabilizerAPI {
     monitoring: boolean; startedAt: string; monitoredRequests: number; finishedRequests: number; activeRequests: number; lastMonitoredAt: string | null;
     confirmed: number; recoverySubmitted: number; events: ReturnType<MetricsStore['snapshot']>['events']; logging: ReturnType<MetricsStore['snapshot']>['logging'];
   };
+  sessionStatus(sessionId: string): {
+    monitoring: boolean; mode: Settings['mode']; startedAt: string;
+    coverage: 'waiting' | 'monitoring' | 'checked' | 'other-model' | 'auxiliary' | 'unavailable' | 'paused' | 'disabled';
+    monitoredRequests: number; activeRequests: number; confirmed: number; toolWarnings: number; recoverySubmitted: number; cancelRequested: number;
+    lastMonitoredAt: string | null; latestEvent: DiagnosticEvent | null; events: ReturnType<MetricsStore['forSession']>;
+  };
   setMonitoring(enabled: boolean): void;
   selfTest(): { passed: boolean; scope: 'offline-detector-only'; modelRequests: 0 };
   setSessionEnabled(sessionId: string, enabled: boolean): void;
@@ -25,6 +31,9 @@ interface SessionState {
   request?: { monitor: StreamMonitor; signal: AbortSignal; frameId?: string };
   frameId?: string; progress: ProgressGuard; ending?: Record<string, unknown>;
   enabled: boolean; noticeKeys: Set<string>;
+  coverage: 'waiting' | 'other-model' | 'auxiliary' | 'unavailable' | 'checked';
+  monitoredRequests: number; confirmed: number; toolWarnings: number; recoverySubmitted: number; cancelRequested: number; lastMonitoredAt: string | null;
+  latestEvent: DiagnosticEvent | null;
 }
 
 export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
@@ -45,13 +54,25 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const warn = (message: string) => { try { ctx.logger?.warn(message); } catch { /* Logging is optional. */ } };
   const metrics = new MetricsStore(config.logDir, config.maxLogBytes, () => warn('flash-stabilizer: diagnostic logging disabled after an I/O error'));
   const report = (event: Notice) => {
-    metrics.record(event);
+    const safe = metrics.record(event);
+    const state = states.get(event.session);
+    if (state) {
+      if (safe) state.latestEvent = safe;
+      if (event.kind === 'stream-repeat' && event.confirmed) state.confirmed++;
+      if (event.kind === 'tool-repeat') state.toolWarnings++;
+      if (event.kind === 'recovery' && event.action === 'recovery-submitted') state.recoverySubmitted++;
+      if (event.kind === 'recovery' && event.action === 'cancel-requested') state.cancelRequested++;
+    }
     if (event.kind !== 'recovery' && event.score < 70) return;
     warn(config.language === 'zh'
       ? `Flash Stabilizer：${event.kind}，风险分数 ${event.score}，动作 ${event.action ?? 'observe'}；详情见「Flash 防空转」面板。`
       : `Flash Stabilizer: ${event.kind}, risk ${event.score}, action ${event.action ?? 'observe'}.`);
   };
-  const recovery = new RecoveryController(config, (action, agent) => metrics.record({ kind: 'recovery', session: agent.id, score: 0, confirmed: false, chars: 0, action }));
+  const recovery = new RecoveryController(config, (action, agent) => {
+    const state = states.get(agent.id);
+    report({ kind: 'recovery', session: agent.id, score: 0, confirmed: false, chars: 0, action,
+      ...(state ? { turn: state.turn, step: state.step } : {}) });
+  });
   const guarded = (operation: () => void) => {
     if (disposed) return;
     try { operation(); }
@@ -72,7 +93,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     }
     const enabled = !disabledSessions.has(agent.id);
     recovery.setEnabled(agent, enabled && monitoring);
-    state = { agent, turn: 0, step: 0, progress: new ProgressGuard(config.toolRepeatLimit), enabled, noticeKeys: new Set() };
+    state = { agent, turn: 0, step: 0, progress: new ProgressGuard(config.toolRepeatLimit), enabled, noticeKeys: new Set(),
+      coverage: 'waiting', monitoredRequests: 0, confirmed: 0, toolWarnings: 0, recoverySubmitted: 0, cancelRequested: 0, lastMonitoredAt: null, latestEvent: null };
     states.set(agent.id, state);
     return state;
   };
@@ -98,6 +120,10 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     // Delegate exactly once, outside our error containment: host failures remain authoritative.
     const upstream = next();
     const state = options.sessionId ? states.get(options.sessionId) : undefined;
+    if (state && !disposed && options.purpose && !state.request && !state.monitoredRequests) state.coverage = 'auxiliary';
+    if (state && !disposed && !options.purpose && !state.request) {
+      state.coverage = !selected(options) ? 'other-model' : !options.signal || options.signal !== state.signal ? 'unavailable' : 'waiting';
+    }
     if (disposed || !monitoring || !state?.enabled || !selected(options) || options.purpose || !options.signal || options.signal !== state.signal) return upstream;
     return (async function* () {
       const signal = options.signal!;
@@ -108,25 +134,33 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
           const key = evidence.confirmed ? 'confirmed' : 'suspected';
           if (!state.noticeKeys.has(key)) {
             state.noticeKeys.add(key);
-            report({ kind: 'stream-repeat', session: state.agent.id, score: evidence.score, confirmed: evidence.confirmed, chars: evidence.chars, period: evidence.period, repeats: evidence.repeats });
+            report({ kind: 'stream-repeat', session: state.agent.id, score: evidence.score, confirmed: evidence.confirmed, chars: evidence.chars,
+              period: evidence.period, repeats: evidence.repeats, contentType: evidence.contentType, turn: state.turn, step: state.step });
           }
           if (evidence.confirmed) recovery.request(state.agent, signal, compatibility.intervention);
         });
         state.noticeKeys.clear();
+        state.latestEvent = null;
         request = { monitor, signal, ...(state.frameId ? { frameId: state.frameId } : {}) };
         state.request = request;
         monitoredRequests++; lastMonitoredAt = new Date().toISOString();
+        state.monitoredRequests++; state.lastMonitoredAt = lastMonitoredAt; state.coverage = 'checked';
       });
       const ownRequest = request;
+      let completed = false;
       try {
         for await (const chunk of upstream) {
           if (compatibility.adapter === 'stream-waterfall' && ownRequest && state.request === ownRequest) guarded(() => ownRequest.monitor.push(chunk));
           yield chunk;
         }
+        completed = true;
       } finally {
         if (ownRequest) {
           finishedRequests++;
-          if (state.request === ownRequest) delete state.request;
+          if (state.request === ownRequest) {
+            if (!completed) state.coverage = 'unavailable';
+            delete state.request;
+          }
         }
       }
     })();
@@ -148,7 +182,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     if (!selected(route ?? {})) return;
     const evidence = state.progress.record(exec, result);
     if (evidence.repeated && evidence.count === config.toolRepeatLimit) {
-      report({ kind: 'tool-repeat', session: exec.agent.id, score: evidence.failed ? 85 : 70, confirmed: false, chars: 0, repeats: evidence.count });
+      report({ kind: 'tool-repeat', session: exec.agent.id, score: evidence.failed ? 85 : 70, confirmed: false, chars: 0,
+        repeats: evidence.count, turn: state.turn, step: state.step });
       // Repetition of a tool is observation only; never skip, deny, or replay it.
     }
   }));
@@ -170,6 +205,18 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     recovery.forget(agent);
   }));
   const api: StabilizerAPI = {
+    sessionStatus: sessionId => {
+      const state = states.get(sessionId);
+      return {
+        monitoring: monitoring && !disposed, mode: effectiveMode, startedAt,
+        coverage: !monitoring || disposed ? 'paused' : disabledSessions.has(sessionId) ? 'disabled'
+          : state?.request ? 'monitoring' : state?.coverage ?? 'waiting',
+        monitoredRequests: state?.monitoredRequests ?? 0, activeRequests: state?.request ? 1 : 0,
+        confirmed: state?.confirmed ?? 0, toolWarnings: state?.toolWarnings ?? 0,
+        recoverySubmitted: state?.recoverySubmitted ?? 0, cancelRequested: state?.cancelRequested ?? 0,
+        lastMonitoredAt: state?.lastMonitoredAt ?? null, latestEvent: state?.latestEvent ? { ...state.latestEvent } : null, events: metrics.forSession(sessionId),
+      };
+    },
     status: () => ({
       compatibility: { ...compatibility }, mode: effectiveMode, sessions: states.size, counts: { ...metrics.counts },
       monitoring: monitoring && !disposed, startedAt, monitoredRequests, finishedRequests,
@@ -179,7 +226,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     setMonitoring: enabled => guarded(() => {
       monitoring = enabled;
       for (const state of states.values()) {
-        if (!enabled) delete state.request;
+        if (!enabled && state.request) { state.coverage = 'unavailable'; delete state.request; }
         recovery.setEnabled(state.agent, enabled && state.enabled);
       }
     }),
@@ -194,7 +241,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       const agent = states.get(sessionId)?.agent ?? ctx.agents?.get(sessionId);
       if (!agent) return;
       const state = stateFor(agent); state.enabled = enabled;
-      if (!enabled) delete state.request;
+      if (!enabled && state.request) { state.coverage = 'unavailable'; delete state.request; }
       recovery.setEnabled(agent, enabled && monitoring);
     }),
   };

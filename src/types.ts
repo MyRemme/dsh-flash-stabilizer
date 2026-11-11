@@ -45,4 +45,5 @@ export interface Notice {
   kind: 'stream-repeat' | 'tool-repeat' | 'test-repeat' | 'recovery' | 'compatibility' | 'internal-error';
   session: string; score: number; confirmed: boolean; chars: number;
   period?: number; repeats?: number; action?: string;
+  contentType?: 'reasoning' | 'text'; turn?: number; step?: number;
 }

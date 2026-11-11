@@ -15,7 +15,7 @@ export class MetricsStore {
   private closed = false;
   private failed = false;
   constructor(private readonly directory: string, private readonly maxBytes: number, private readonly warn: () => void) {}
-  record(event: Notice): void {
+  record(event: Notice): DiagnosticEvent | undefined {
     if (this.closed) return;
     this.counts[event.kind] = (this.counts[event.kind] ?? 0) + 1;
     if (event.kind === 'stream-repeat' && event.confirmed) this.confirmed++;
@@ -29,14 +29,18 @@ export class MetricsStore {
       ...(event.period === undefined ? {} : { period: event.period }),
       ...(event.repeats === undefined ? {} : { repeats: event.repeats }),
       ...(event.action === undefined ? {} : { action: event.action }),
+      ...(event.contentType === undefined ? {} : { contentType: event.contentType }),
+      ...(event.turn === undefined ? {} : { turn: event.turn }),
+      ...(event.step === undefined ? {} : { step: event.step }),
     };
     this.recent.push(safe);
     if (this.recent.length > 100) this.recent.shift();
-    if (!this.directory || this.failed) return;
-    if (this.pending.length >= 128) { this.counts.dropped = (this.counts.dropped ?? 0) + 1; return; }
+    if (!this.directory || this.failed) return { ...safe };
+    if (this.pending.length >= 128) { this.counts.dropped = (this.counts.dropped ?? 0) + 1; return { ...safe }; }
     // No raw content, argument, command, error text, or session id reaches disk.
     this.pending.push(safe);
     this.draining ??= this.drain();
+    return { ...safe };
   }
   private async drain(): Promise<void> {
     try {
@@ -72,6 +76,10 @@ export class MetricsStore {
       events: this.recent.map(event => ({ ...event })).reverse(),
       logging: { enabled: Boolean(this.directory), healthy: !this.failed, retained: this.recent.length, limit: 100 },
     };
+  }
+  forSession(sessionId: string): DiagnosticEvent[] {
+    const hash = createHash('sha256').update(sessionId).digest('hex').slice(0, 16);
+    return this.recent.filter(event => event.session === hash).map(event => ({ ...event })).reverse();
   }
   async close(): Promise<void> { this.closed = true; await this.draining; }
 }

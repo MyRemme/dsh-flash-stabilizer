@@ -14,7 +14,7 @@ interface BlockState {
 export class StreamMonitor {
   private blocks = new Map<number, BlockState>();
   private reported = false;
-  constructor(private readonly config: Settings, private readonly report: (e: RepeatEvidence) => void) {}
+  constructor(private readonly config: Settings, private readonly report: (e: RepeatEvidence & { contentType: 'reasoning' | 'text' }) => void) {}
   push(chunk: Chunk): void {
     if (this.reported) return;
     if (chunk.type === 'finish') { this.blocks.clear(); return; }
@@ -57,7 +57,7 @@ export class StreamMonitor {
       if (result && !this.reported) {
         // Suspicion stays observable; only one confirmed incident per attempt.
         if (result.confirmed) { this.reported = true; this.blocks.clear(); }
-        this.report(result);
+        this.report({ ...result, contentType: block.type === 'reasoning' ? 'reasoning' : 'text' });
       }
     }
   }

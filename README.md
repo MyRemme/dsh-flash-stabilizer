@@ -1,4 +1,4 @@
-# DSH Flash Stabilizer 0.1.2
+# DSH Flash Stabilizer 0.1.3
 
 DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正文和重复工具结果，提供可选的有限软纠正。包内含构建产物，安装时不需要编译。
 
@@ -10,6 +10,7 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 - 对五分钟内相同工具、相同参数且结果不变的重复执行告警。结果变化会重置该指纹的计数。
 - `observe` 默认只告警；`assist` 在确认重复后等待当前回合正常结束或耗尽输出，再通过宿主 `agent.followup()` 开启独立纠正回合，每个用户任务最多两次。错误、用户停止、新用户输入、禁用会话或卸载会取消待执行的纠正，不向当前步骤注入消息。
 - 提供原生「Flash 防空转」侧栏、插件详情面板和重复告警提示，显示监控请求数、最近监控时间、检测记录及实际纠正动作。
+- 面板复用 DSH 原生按钮、开关、图标及明暗主题；每个对话的输入框下方显示独立监控状态，点击可查看该对话的重复原因、轮次、步骤和实际动作。
 - 提供暂停 / 继续、刷新、离线自检及去标识日志导出；另支持会话级开关和有界本地 JSONL 日志。
 
 插件不改写流、历史、工具参数或采样设置，不自行执行、跳过或重放工具。`assist` 会增加后续模型回合和费用；当前回合需要自行结束，纠正提示才可能生效。独立回合避免宿主保留 `max-tokens` 状态而在执行一次工具后提前停止。
@@ -34,6 +35,8 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 在侧栏打开 **Flash 防空转**，或进入 **插件 → dsh-flash-stabilizer → 配置**。新增前端模块后可能需要刷新 Harness 页面。
 
 - 「监控在线」表示服务已连接并启用；「已监控请求」及「最近监控请求」在实际匹配的 Flash 请求开始消费时更新。
+- 对话输入框下方的「Flash」状态分别显示待请求、监控中、最近请求未发现重复、模型不匹配、暂停或检测不完整。当前请求状态与历史告警分开；历史重复不会覆盖新请求的状态。
+- 点击对话状态可查看周期长度、重复次数、推理或正文类型以及轮次与步骤。观察模式明确显示「仅告警，未拦截、未中断输出」；待纠正、纠正已提交及请求中断分别记录，不代表恢复或中断成功。
 - 检测确认后显示界内告警和记录；纠正意图、已提交及预算耗尽分别标注。「已提交纠正」是累计提交数，不代表恢复成功。
 - 「暂停监控」不会停止模型或工具，只撤销待执行纠正并停止监控；恢复从下一次请求开始。暂停状态在插件重载后重置。
 - 「离线自检」只用内存样本检测，不调用模型、不修改会话、不计入真实告警。
@@ -46,7 +49,7 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.2.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.3.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -102,6 +105,7 @@ dsh plugin --profile desktop remove dsh-flash-stabilizer
 
 ```typescript
 ctx.flashStabilizer.status()
+ctx.flashStabilizer.sessionStatus(sessionId)
 ctx.flashStabilizer.setSessionEnabled(sessionId, false)
 ctx.flashStabilizer.setSessionEnabled(sessionId, true)
 ```
@@ -112,7 +116,7 @@ ctx.flashStabilizer.setSessionEnabled(sessionId, true)
 
 默认在面板保留最近 100 条去标识诊断事件，同时在宿主日志中给出高风险告警，不持久保存输出内容。启用 `logDir` 后最多保留 `events.jsonl`、`events.previous.jsonl` 两个文件；队列有上限，拥塞时丢弃诊断事件，I/O 错误会停写并保留宿主运行。
 
-日志只含事件类型、时间、风险分数、字符数、周期、重复次数、动作及截短的会话 ID 哈希，不含原始推理、正文、命令、参数、错误或凭据。哈希是去标识措施，不是加密或完全匿名化。内存计数及会话跟踪会在重载后清空。
+日志只含事件类型、时间、风险分数、字符数、周期、重复次数、内容类型、轮次、步骤、动作及截短的会话 ID 哈希，不含原始推理、正文、命令、参数、错误或凭据。哈希是去标识措施，不是加密或完全匿名化。内存计数及会话跟踪会在重载后清空；会话计数在状态回收后重新跟踪时也会重置。每个对话的详情从全局最近 100 条事件筛选，不保证永久保存全部历史。
 
 风险分数是启发式评分，**不是循环概率**。有意重复文本、未加围栏的模板及必要的重复测试仍可能触发告警；此时保持 observe，或关闭该会话的监控。
 
@@ -125,10 +129,10 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.2.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.3.tgz
 ```
 
-`npm run check` 包含类型检查、构建及 131 项自动化测试，包含真实 React / DOM 中的面板交互及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
+`npm run check` 包含类型检查、构建及 144 项自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
 
 优化前构建可保存在仓库外或 `.compat-cache/`，用 `node scripts/benchmark-detection.mjs '<旧版 dist 目录>'` 对照 10,100 组输入及长流告警结果，并测量本地检测耗时。这是检测器基准，不是模型生成速度、Token 消耗或恢复质量测试。
 

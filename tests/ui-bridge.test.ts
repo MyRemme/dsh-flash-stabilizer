@@ -57,3 +57,51 @@ it('pausing revokes pending corrections and does not cancel the model or consume
   await stream(host, makeAgent('resumed'), chunks('ordinary content'), false);
   expect(api.status().monitoredRequests).toBe(2);
 });
+it('validates the per-session endpoint and isolates each conversation without exporting raw ids', async () => {
+  const { host, api, call } = setup();
+  for (const payload of [{}, { sessionId: '' }, { sessionId: 2 }, { sessionId: 'a', extra: true }, { sessionId: 'x'.repeat(1025) }]) expect(call('session', payload).error?.code).toBe('BAD_REQUEST');
+  expect(call('session', { sessionId: 'a' }, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('session', { sessionId: 'a' }).value).toMatchObject({ coverage: 'waiting', monitoredRequests: 0, confirmed: 0, events: [] });
+  const a = makeAgent('private-a'); a.followup = () => {};
+  await stream(host, a, chunks(repeated), false);
+  await stream(host, makeAgent('private-b'), chunks('ordinary output'), false);
+  const own = call('session', { sessionId: a.id }).value;
+  expect(own).toMatchObject({ coverage: 'checked', monitoredRequests: 1, confirmed: 1, cancelRequested: 0, recoverySubmitted: 0 });
+  expect(own.events.find((event: { confirmed: boolean }) => event.confirmed)).toMatchObject({ contentType: 'reasoning', turn: 1, step: 1 });
+  expect(own.latestEvent).toMatchObject({ kind: 'recovery', action: 'correction-deferred' });
+  expect(JSON.stringify(own)).not.toContain('private-a');
+  expect(call('session', { sessionId: 'private-b' }).value).toMatchObject({ coverage: 'checked', confirmed: 0, events: [] });
+  await stream(host, makeAgent('private-c'), chunks(repeated), false, { model: 'other' });
+  expect(api.sessionStatus('private-c')).toMatchObject({ coverage: 'other-model', monitoredRequests: 0 });
+  api.setSessionEnabled('private-b', false);
+  expect(api.sessionStatus('private-b').coverage).toBe('disabled');
+  api.setMonitoring(false);
+  expect(api.sessionStatus('private-a').coverage).toBe('paused');
+});
+it('resets current-request evidence but retains historical incidents and reports missing coverage honestly', async () => {
+  const { host, api } = setup();
+  const agent = makeAgent('a');
+  await stream(host, agent, chunks(repeated), false);
+  expect(api.sessionStatus('a').latestEvent).not.toBeNull();
+  await stream(host, agent, chunks('ordinary output'), false);
+  expect(api.sessionStatus('a')).toMatchObject({ coverage: 'checked', latestEvent: null, confirmed: 1, monitoredRequests: 2 });
+  expect(api.sessionStatus('a').events.length).toBeGreaterThan(0);
+  await stream(host, agent, chunks('auxiliary'), false, { purpose: 'summary' });
+  expect(api.sessionStatus('a').coverage).toBe('checked');
+  await stream(host, agent, chunks('unmatched signal'), false, { signal: new AbortController().signal });
+  expect(api.sessionStatus('a').coverage).toBe('unavailable');
+  await stream(host, makeAgent('aux'), chunks('auxiliary'), false, { purpose: 'summary' });
+  expect(api.sessionStatus('aux').coverage).toBe('auxiliary');
+});
+it('does not report a fully checked request when monitoring was paused midstream', async () => {
+  const { host, api } = setup();
+  const agent = makeAgent('a'), controller = new AbortController();
+  host.emit('agent/pre-step', { agent, turn: 1, step: 1, signal: controller.signal, messages: [] }, () => Promise.resolve());
+  async function* upstream() { yield { type: 'text-delta', index: 0, text: 'hello' }; yield { type: 'finish' }; }
+  const iterator = host.waterfall('llm/stream', [{ sessionId: 'a', model: 'deepseek-flash', signal: controller.signal }], () => upstream())[Symbol.asyncIterator]();
+  await iterator.next();
+  expect(api.sessionStatus('a').coverage).toBe('monitoring');
+  api.setMonitoring(false); api.setMonitoring(true);
+  await iterator.next(); await iterator.next();
+  expect(api.sessionStatus('a').coverage).toBe('unavailable');
+});
