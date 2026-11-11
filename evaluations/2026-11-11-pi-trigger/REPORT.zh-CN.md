@@ -51,7 +51,7 @@
 
 参考：[deepseek-recipe #24](https://github.com/deepseek-ai/deepseek-recipe/issues/24)、[vLLM #62935](https://github.com/vllm-project/vllm/issues/62935)、[DSH discussion #11943](https://github.com/deepseek-ai/deepseek-harness/discussions/11943)。这些案例没有提供完整公开失败历史，因此本轮是条件类比，不是原请求复现，也不是采样器根因验证。
 
-原始证据目录：`.\.compat-cache\pi-trigger\2026-11-11T04-34-50-983Z`（受Git忽略）。每组保存初始显式上下文、后续实际HTTP请求、原始响应、模型消息、增量与工具结果；本报告 `summary.json` 包含逐请求核验、检测证据和哈希。
+原始证据目录：`.compat-cache/pi-trigger/2026-11-11T04-34-50-983Z`（受Git忽略）。每组保存初始显式上下文、后续实际HTTP请求、原始响应、模型消息、增量与工具结果；本报告 `summary.json` 包含逐请求核验、检测证据和哈希。
 
 复跑（会发生模型费用）：
 

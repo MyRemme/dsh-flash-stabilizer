@@ -10,12 +10,34 @@ describe('bounded recovery', () => {
     new RecoveryController({ ...defaults, mode: 'auto' }, () => {}).request(agent, new AbortController().signal, false);
     expect(agent.cancel).not.toHaveBeenCalled(); expect(agent.followup).not.toHaveBeenCalled();
   });
-  it('caps corrections across calls and only resets for new user work', () => {
-    const agent = { ...makeAgent(), inject: vi.fn() }, c = new RecoveryController({ ...defaults, mode: 'assist' }, () => {});
-    for (let i = 0; i < 10; i++) c.request(agent, new AbortController().signal, false);
-    expect(agent.inject).toHaveBeenCalledTimes(2);
+  it('caps independent recovery turns and only resets for new user work', async () => {
+    const agent = { ...makeAgent(), status: 'idle', followup: vi.fn(), inject: vi.fn() }, c = new RecoveryController({ ...defaults, mode: 'assist' }, () => {});
+    for (let i = 0; i < 10; i++) {
+      c.request(agent, new AbortController().signal, false);
+      c.settled(agent, { reason: { kind: 'completed' } }); await Promise.resolve();
+    }
+    expect(agent.followup).toHaveBeenCalledTimes(2);
+    expect(agent.inject).not.toHaveBeenCalled();
     c.resetByUser(agent); c.request(agent, new AbortController().signal, false);
-    expect(agent.inject).toHaveBeenCalledTimes(3);
+    c.settled(agent, { reason: { kind: 'completed' } }); await Promise.resolve();
+    expect(agent.followup).toHaveBeenCalledTimes(3);
+  });
+  it.each(['completed', 'max-tokens'])('defers assist until %s settlement and never injects into the current step', async kind => {
+    const agent = { ...makeAgent(), followup: vi.fn(), inject: vi.fn() };
+    const c = new RecoveryController({ ...defaults, mode: 'assist' }, () => {});
+    for (let i = 0; i < 5; i++) c.request(agent, new AbortController().signal, false);
+    expect(agent.followup).not.toHaveBeenCalled(); expect(agent.inject).not.toHaveBeenCalled();
+    expect(agent.inbox!.nextStep).toEqual([]);
+    agent.status = 'idle'; c.settled(agent, { reason: { kind } }); await Promise.resolve();
+    expect(agent.followup).toHaveBeenCalledTimes(1);
+  });
+  it.each(['error', 'aborted', 'blocked', undefined])('discards deferred assist after %s without leaving messages', async kind => {
+    const agent = { ...makeAgent(), status: 'idle', followup: vi.fn(), inject: vi.fn() };
+    const c = new RecoveryController({ ...defaults, mode: 'assist' }, () => {});
+    c.request(agent, new AbortController().signal, false);
+    c.settled(agent, kind ? { reason: { kind } } : undefined); await Promise.resolve(); c.dispose();
+    expect(agent.followup).not.toHaveBeenCalled(); expect(agent.inject).not.toHaveBeenCalled();
+    expect(agent.inbox!.nextStep).toEqual([]);
   });
   it('does not resume before settlement and idle, and never calls tools', async () => {
     const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() }, c = new RecoveryController({ ...defaults, mode: 'auto' }, () => {});
@@ -37,5 +59,21 @@ describe('bounded recovery', () => {
     c.settled(agent, scenario === 'user-stop' ? { reason: { kind: 'aborted', reason: { kind: 'user' } } } : ending);
     if (scenario === 'unload') c.dispose();
     await Promise.resolve(); expect(agent.followup).not.toHaveBeenCalled();
+  });
+  it.each(['assist', 'auto'] as const)('revokes scheduled %s after idle before its microtask runs', async mode => {
+    for (const action of ['reset', 'forget', 'disable', 'dispose', 'user-input', 'abort']) {
+      if (mode === 'auto' && action === 'abort') continue; // Auto owns the original abort.
+      const agent = { ...makeAgent(), status: 'idle', cancel: vi.fn(), followup: vi.fn() };
+      const c = new RecoveryController({ ...defaults, mode }, () => {}), controller = new AbortController();
+      c.request(agent, controller.signal, true);
+      c.settled(agent, mode === 'auto' ? ending : { reason: { kind: 'max-tokens' } });
+      if (action === 'reset') c.resetByUser(agent);
+      if (action === 'forget') c.forget(agent);
+      if (action === 'disable') c.setEnabled(agent, false);
+      if (action === 'dispose') c.dispose();
+      if (action === 'user-input') agent.inbox!.nextTurn = [{}];
+      if (action === 'abort') controller.abort();
+      await Promise.resolve(); expect(agent.followup).not.toHaveBeenCalled();
+    }
   });
 });

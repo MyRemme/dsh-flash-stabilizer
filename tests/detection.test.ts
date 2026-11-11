@@ -42,6 +42,45 @@ describe('repeat evidence', () => {
     chunks('```text\n' + repeated + '\n```', size, 'text').forEach(c => monitor.push(c));
     expect(events.some(e => e.confirmed)).toBe(false);
   });
+  it('does not go blind after an inline triple-backtick mention in reasoning', () => {
+    const events: { confirmed: boolean }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    chunks('先检查字符串中是否包含 ``` 分隔符。\n' + '好。执行。好。'.repeat(600), 73, 'reasoning').forEach(c => monitor.push(c));
+    expect(events.filter(e => e.confirmed)).toHaveLength(1);
+  });
+  it('confirms short period phrases after a non-repeating preamble without harmonic resets', () => {
+    const events: { confirmed: boolean; chars: number }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    chunks('先正常分析当前模块依赖与构建配置。\n' + '好。执行。好。'.repeat(500), 73, 'reasoning').forEach(c => monitor.push(c));
+    expect(events.filter(e => e.confirmed)).toHaveLength(1);
+    expect(events.find(e => e.confirmed)!.chars).toBeLessThan(3200);
+  });
+  it('still inspects block-end text if only an empty delta preceded it', () => {
+    const events: { confirmed: boolean }[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
+    monitor.push({ type: 'reasoning-delta', index: 0, text: '' });
+    monitor.push({ type: 'block-end', index: 0, block: { type: 'reasoning', text: repeated } });
+    expect(events.some(e => e.confirmed)).toBe(true);
+  });
+  it.each([1, 2, 73, 4096])('respects fence lengths, markers, and trailing text across %i-character deltas', size => {
+    for (const [open, falseClose, close] of [
+      ['````text', '```', '````'], ['```text', '```not-a-closer', '```'],
+      ['~~~text', '```', '~~~'], ['~~~~text', '~~~', '~~~~'],
+      ['   ```text', '    ```', '   ```'], ['```text', '``` ~', '```'],
+    ]) {
+      const prefix = `${open}\r\nordinary code\r\n${falseClose}\r\n${repeated}\r\n`;
+      const events: { confirmed: boolean }[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
+      chunks(prefix, size, 'text').slice(0, -2).forEach(c => monitor.push(c));
+      expect(events.some(e => e.confirmed)).toBe(false);
+      const suffix = `${close}\r\n${repeated}`;
+      for (let n = 0; n < suffix.length; n += size) monitor.push({ type: 'text-delta', index: 0, text: suffix.slice(n, n + size) });
+      expect(events.some(e => e.confirmed)).toBe(true);
+    }
+  });
+  it.each(['prefix ``` mention\n', 'prefix ~~~ mention\n', '```bad`info\n', '\t```text\n', '    ```text\n'])('does not open a fence for %j', prefix => {
+    const events: { confirmed: boolean }[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
+    chunks(prefix + repeated, 1).forEach(c => monitor.push(c));
+    expect(events.some(e => e.confirmed)).toBe(true);
+  });
   it('does not join independent blocks or inspect tool JSON', () => {
     const events: unknown[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
     for (let i = 0; i < 20; i++) {

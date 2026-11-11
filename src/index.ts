@@ -29,6 +29,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   if (config.hostVersion && detected !== config.hostVersion) compatibility.intervention = false;
   const effectiveMode = config.mode === 'auto' && !compatibility.intervention ? 'observe' : config.mode;
   const states = new Map<string, SessionState>();
+  const disabledSessions = new Set<string>(config.disabledSessions);
   let disposed = false;
   const warn = (message: string) => { try { ctx.logger?.warn(message); } catch { /* Logging is optional. */ } };
   const metrics = new MetricsStore(config.logDir, config.maxLogBytes, () => warn('flash-stabilizer: diagnostic logging disabled after an I/O error'));
@@ -47,14 +48,20 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   };
   const stateFor = (agent: Agent): SessionState => {
     let state = states.get(agent.id);
-    if (state?.agent === agent) return state;
-    if (state) recovery.forget(state.agent);
+    if (state?.agent === agent) {
+      states.delete(agent.id);
+      states.set(agent.id, state);
+      return state;
+    }
+    if (state) { recovery.forget(state.agent); states.delete(agent.id); }
     if (states.size >= config.maxSessions) {
       const idle = [...states.values()].find(s => !s.request && s.agent.status !== 'running');
       if (!idle) throw new RangeError('session capacity reached');
       recovery.forget(idle.agent); states.delete(idle.agent.id);
     }
-    state = { agent, turn: 0, step: 0, progress: new ProgressGuard(config.toolRepeatLimit), enabled: !config.disabledSessions.includes(agent.id), noticeKeys: new Set() };
+    const enabled = !disabledSessions.has(agent.id);
+    recovery.setEnabled(agent, enabled);
+    state = { agent, turn: 0, step: 0, progress: new ProgressGuard(config.toolRepeatLimit), enabled, noticeKeys: new Set() };
     states.set(agent.id, state);
     return state;
   };
@@ -110,7 +117,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     ctx.on('agent/assistant-stream', ({ agent, frame }: { agent: Agent; frame: { type: string; attemptId: string; chunk?: Chunk } }) => guarded(() => {
       const state = states.get(agent.id);
       if (!state || state.agent !== agent) return;
-      if (frame.type === 'start') { state.frameId = frame.attemptId; return; }
+      if (frame.type === 'start') { state.frameId = frame.attemptId; if (state.request) state.request.frameId = frame.attemptId; return; }
       if (frame.type === 'chunk' && frame.chunk && state.enabled && state.request?.frameId === frame.attemptId) state.request.monitor.push(frame.chunk);
     }));
   }
@@ -135,7 +142,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   ctx.on('agent/status', ({ agent, status }: { agent: Agent; status: string }) => guarded(() => {
     const state = states.get(agent.id);
     if (status !== 'idle' || !state || state.agent !== agent) return;
-    if (state.ending) { recovery.settled(agent, state.ending); delete state.ending; }
+    recovery.settled(agent, state.ending);
+    delete state.ending;
     delete state.request; delete state.signal;
   }));
   ctx.on('agent/disposed', ({ agent }: { agent: Agent }) => guarded(() => {
@@ -144,14 +152,14 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   }));
   const api: StabilizerAPI = {
     status: () => ({ compatibility: { ...compatibility }, mode: effectiveMode, sessions: states.size, counts: { ...metrics.counts } }),
-    setSessionEnabled(sessionId, enabled) {
-      if (disposed) return;
+    setSessionEnabled: (sessionId, enabled) => guarded(() => {
+      if (enabled) disabledSessions.delete(sessionId); else disabledSessions.add(sessionId);
       const agent = states.get(sessionId)?.agent ?? ctx.agents?.get(sessionId);
       if (!agent) return;
       const state = stateFor(agent); state.enabled = enabled;
       if (!enabled) delete state.request;
       recovery.setEnabled(agent, enabled);
-    },
+    }),
   };
   ctx.provide?.('flashStabilizer', api);
   if (config.mode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过自动干预验证，已使用观察模式。' : 'Flash Stabilizer: automatic intervention is not verified; using observation mode.');

@@ -4,7 +4,7 @@
 
 ## 已通过
 
-- `npm run check`：TypeScript 类型检查、预构建及全部 89 项测试通过，共 6 个测试文件。
+- `npm run check`：TypeScript 类型检查、预构建及全部 112 项测试通过，共 6 个测试文件。
 - 官方 37 个 Release 条目的接口审查与流协议回放。
 - 35 个可取得 npm 宿主包的版本：分别安装相同发行版的 DSH 服务与对应 Cordis，未使用强制忽略 peer 冲突的安装方式。
 - 将预构建 `.tgz` 解压至每个隔离宿主后，全部 35 个版本通过实际包代码测试，且正确识别当前宿主版本。
@@ -12,7 +12,8 @@
 - 本地日志测试覆盖去标识、单文件大小上限、最多两个文件、卸载排空及 I/O 错误回退。
 - 本地 DSH 日志中 20 个去重的真实 reasoning 空转样本，保持原始分块边界回放后全部检出。完整数据口径见 [本地会话报告](evaluations/2026-11-11-dsh-local/REPORT.zh-CN.md)。
 - DSH 0.2.2-rc.1 隔离宿主中，测试副本可取消真实历史流并提交一次纠正续接。发布包仍未解锁 auto，恢复响应使用确定性适配器。
-- 修复中文短句轮转、奇数 delta 分块及实际 `fixture:deepseek-v4.1-flash` 路由未匹配的问题。
+- 修复中文短句轮转、奇数 delta 分块、短周期谐波跳变、围栏长度及关闭行误判、空 delta 漏检、会话禁用状态保持、满容量下同 ID 实例替换及实际 `fixture:deepseek-v4.1-flash` 路由（含 `cordis.patch.yml`）未匹配的问题。
+- `assist` 改为回合结束后开启独立纠正回合，避免 `max-tokens` 粘滞；验证模型收到恢复步骤的工具结果，且工具仅执行一次。异常、停止、禁用、重置及卸载不会留下注入消息。
 
 逐版本结果和具体测试项位于 [host-results.json](compatibility/host-results.json)，接口来源及 SHA 位于 [releases.json](compatibility/releases.json)。
 

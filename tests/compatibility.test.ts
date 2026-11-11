@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { apply } from '../src/index.js';
+import { readFileSync } from 'node:fs';
+import { defaults } from '../src/config.js';
+import { apply, type StabilizerAPI } from '../src/index.js';
 import { compatibilityFor, releases } from '../src/compatibility.js';
 import { FakeHost, chunks, makeAgent, repeated, stream } from './helpers.js';
 const active: FakeHost[] = [];
@@ -52,4 +54,27 @@ it('preserves upstream errors and downstream policy results', async () => {
   const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
   const failure = new Error('upstream failure');
   expect(() => host.waterfall('llm/stream', [{}], () => { throw failure; })).toThrow(failure);
+});
+it('keeps cordis.patch.yml models aligned with defaults.models', () => {
+  const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
+  for (const model of defaults.models) expect(patch).toContain(`- ${model}`);
+});
+it('persists setSessionEnabled across pre-creation and agent instance recreation', async () => {
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
+  const api = host.values.get('flashStabilizer') as StabilizerAPI;
+  api.setSessionEnabled('s1', false);
+  await stream(host, makeAgent('s1'), chunks(repeated), false);
+  await stream(host, makeAgent('s1'), chunks(repeated), false);
+  expect(host.status().counts['stream-repeat'] ?? 0).toBe(0);
+  api.setSessionEnabled('s1', true);
+  await stream(host, makeAgent('s1'), chunks(repeated), false);
+  expect(host.status().counts['stream-repeat']).toBeGreaterThanOrEqual(1);
+});
+it('replaces the same session at capacity without evicting another session or losing monitoring', async () => {
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7', maxSessions: 1 });
+  await stream(host, makeAgent('same'), chunks('ordinary text'), false);
+  await stream(host, makeAgent('same'), chunks(repeated), false);
+  expect(host.status().sessions).toBe(1);
+  expect(host.status().counts['internal-error'] ?? 0).toBe(0);
+  expect(host.status().counts['stream-repeat']).toBeGreaterThanOrEqual(1);
 });

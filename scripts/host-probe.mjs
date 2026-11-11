@@ -19,8 +19,10 @@ const [{ Context }, llm, sessions, projections, prompt, tools, agents, loop, sta
 ]);
 const ctx = new Context();
 let current, pluginFiber;
-let timer;
-const bound = promise => Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('host probe timed out')), 15000); })]).finally(() => clearTimeout(timer));
+const bound = promise => {
+  let timer;
+  return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('host probe timed out')), 15000); })]).finally(() => clearTimeout(timer));
+};
 const checks = [];
 try {
   for (const service of [llm.default, sessions.default, projections?.default, prompt.default, tools.default, agents.default, loop.default].filter(Boolean)) {
@@ -31,6 +33,9 @@ try {
     const native = await load('@deepseek-ai/dsh-tool-executor-native'); await ctx.plugin(native);
   }
   let response = 'normal', requests = 0, toolBodies = 0, correctionsSeen = 0;
+  let recoveryStep = 0, sawRecoveredToolResult = false, waitingReady;
+  const turnReasons = [];
+  ctx.on('session/event', (_session, event) => { if (event.type === 'turn/end') turnReasons.push(event.data.reason.kind); });
   const hostHint = process.argv[4] ? {} : { hostVersion: version };
   const raw = [];
   class Adapter extends llm.LlmAdapter {
@@ -38,20 +43,50 @@ try {
       requests++;
       if (options.messages.some(m => m.role === 'user' && m.content?.some(c => c.type === 'text' && c.text.includes('检测到当前步骤出现重复推理。')))) correctionsSeen++;
       assert.equal(options.model, 'deepseek-flash');
+      if (response === 'max-tools') {
+        recoveryStep++;
+        if (recoveryStep === 2) {
+          yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'recovery-read', name: 'read_evidence', arguments: '{}' } };
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }; return;
+        }
+        if (recoveryStep === 3) {
+          // Older hosts carry tool-result blocks in user-role messages; newer
+          // hosts use first-class tool messages. Verify correlation AND value.
+          const results = options.messages.flatMap(message => {
+            if (message.source?.kind !== 'tool' || message.source.callId !== 'recovery-read') return [];
+            if (message.role === 'tool' && message.toolCallId === 'recovery-read') return [message];
+            if (message.role === 'user') return message.content.filter(block => block.type === 'tool-result' && block.toolCallId === 'recovery-read');
+            return [];
+          });
+          sawRecoveredToolResult = results.some(result => !result.isError && result.content.some(block => block.type === 'text' && block.text === 'same evidence'));
+        }
+        assert.ok(recoveryStep <= 3, 'bounded max-token recovery');
+      }
       if (response === 'tools' && toolBodies < 4) {
         const call = { type: 'tool-call', id: `call-${requests}`, name: 'read_evidence', arguments: '{}' };
         yield { type: 'block-end', index: 0, block: call };
         yield { type: 'finish', reason: { kind: 'tool-calls' } };
         return;
       }
-      const content = response === 'repeat' ? '现在需要继续分析这个问题并确认下一步必要操作。'.repeat(200) : '任务完成，已有证据。';
+      const content = response === 'repeat' || response === 'waiting' || response === 'max-tools' && recoveryStep === 1
+        ? '现在需要继续分析这个问题并确认下一步必要操作。'.repeat(200) : '任务完成，已有证据。';
       const chunks = [{ type: 'block-start', index: 0, blockType: 'reasoning' }];
       for (let i = 0; i < content.length; i += 97) chunks.push({ type: 'reasoning-delta', index: 0, text: content.slice(i, i + 97) });
       chunks.push({ type: 'block-end', index: 0, block: { type: 'reasoning', text: content } });
       chunks.push({ type: 'text-delta', index: 1, text: '完成。' });
       chunks.push({ type: 'usage', usage: { inputTokens: 12, outputTokens: 15 } });
-      chunks.push({ type: 'finish', reason: { kind: 'stop' } });
-      for (const chunk of chunks) { raw.push(chunk); yield chunk; }
+      chunks.push({ type: 'finish', reason: { kind: response === 'max-tools' && recoveryStep === 1 ? 'max-tokens' : 'stop' } });
+      for (const chunk of chunks) {
+        raw.push(chunk); yield chunk;
+        if (response === 'waiting' && chunk.type === 'block-end') {
+          waitingReady?.();
+          await new Promise(resolve => {
+            if (options.signal.aborted) resolve();
+            else options.signal.addEventListener('abort', resolve, { once: true });
+          });
+          options.signal.throwIfAborted();
+        }
+      }
     }
   }
   ctx.llm.registerAdapter(['mock'], new Adapter());
@@ -87,13 +122,29 @@ try {
   pluginFiber = ctx.plugin(stabilizer, { ...hostHint, mode: 'assist' }); await pluginFiber;
   const beforeAssist = requests, beforeTools = toolBodies;
   await send();
-  assert.equal(requests - beforeAssist, 3, 'assist is limited to two extra steps');
-  assert.equal(ctx.flashStabilizer.status().counts.recovery, 3, 'two queued corrections plus exhausted budget');
+  assert.equal(requests - beforeAssist, 3, 'assist is limited to two extra turns');
+  assert.equal(ctx.flashStabilizer.status().counts.recovery, 5, 'two deferrals, two followups, exhausted budget');
   assert.equal(toolBodies, beforeTools, 'assist never replays tools');
   assert.ok(correctionsSeen >= 2, 'correction reaches actual subsequent model requests');
   const beforeReset = requests;
   await send(); assert.equal(requests - beforeReset, 3, 'new user input resets assist budget');
   checks.push('assist-delivery', 'assist-budget', 'new-user-budget-reset');
+  const beforeMax = requests, beforeMaxTools = toolBodies, beforeMaxTurns = turnReasons.length;
+  response = 'max-tools'; await send();
+  assert.equal(requests - beforeMax, 3, 'model continues after recovered tool execution');
+  assert.equal(toolBodies - beforeMaxTools, 1, 'recovery executes the requested tool exactly once');
+  assert.equal(sawRecoveredToolResult, true, 'model sees the recovered tool result');
+  assert.deepEqual(turnReasons.slice(beforeMaxTurns), ['max-tokens', 'completed']);
+  checks.push('max-tokens-new-turn', 'recovery-tool-result');
+  const beforeStop = requests;
+  response = 'waiting';
+  const ready = new Promise(resolve => { waitingReady = resolve; });
+  const stopped = send(); await bound(ready);
+  assert.equal(current.inbox.nextStep.length, 0, 'assist never leaves injected messages');
+  current.cancel({ kind: 'user' }); await stopped;
+  assert.equal(requests - beforeStop, 1, 'user stop suppresses followup');
+  assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
+  checks.push('assist-user-stop', 'no-injected-residue');
   await pluginFiber.dispose();
   console.log('PROBE_RESULT ' + JSON.stringify({ version, status: 'passed', checks, requests, provider: 'deterministic-mock', node: process.version, packaged: !!process.argv[4] }));
 } finally { await ctx.fiber.dispose(); }

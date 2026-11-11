@@ -11,9 +11,8 @@ export function correction(language: 'zh' | 'en'): UserMessage {
 
 export class RecoveryController {
   private attempts = new Map<string, number>();
-  private pending = new Map<Agent, { cause: object; epoch: number }>();
+  private pending = new Map<Agent, { mode: 'assist' | 'auto'; signal: AbortSignal; scheduled: boolean }>();
   private disabled = new Set<string>();
-  private epoch = 0;
   private disposed = false;
   constructor(private readonly config: Settings, private readonly record: (action: string, agent: Agent) => void) {}
   resetByUser(agent: Agent): void {
@@ -29,32 +28,38 @@ export class RecoveryController {
     const count = this.attempts.get(agent.id) ?? 0;
     if (count >= this.config.maxRecoveries) { this.record('budget-exhausted', agent); return; }
     if (this.config.mode === 'assist') {
-      if (!agent.inject) return;
+      if (!agent.followup || !agent.inbox) { this.record('intervention-unavailable', agent); return; }
       this.attempts.set(agent.id, count + 1);
-      agent.inject(correction(this.config.language));
-      this.record('correction-queued', agent);
+      this.pending.set(agent, { mode: 'assist', signal, scheduled: false });
+      this.record('correction-deferred', agent);
       return;
     }
     if (!verified || !agent.cancel || !agent.followup || !agent.inbox) { this.record('intervention-unavailable', agent); return; }
     this.attempts.set(agent.id, count + 1);
     const cause = { kind: 'hook' as const, reason: 'dsh-flash-stabilizer: confirmed repetition' };
-    this.pending.set(agent, { cause, epoch: this.epoch });
+    this.pending.set(agent, { mode: 'auto', signal, scheduled: false });
     agent.cancel(cause, { keepInbox: true });
     this.record('cancel-requested', agent);
   }
   /** Called after durable turn/end AND the driver's idle transition, outside dispatch. */
-  settled(agent: Agent, ending: Record<string, unknown>): void {
+  settled(agent: Agent, ending?: Record<string, unknown>): void {
+    const reason = ending?.reason as { kind?: string; reason?: { kind?: string; reason?: string } } | undefined;
     const pending = this.pending.get(agent);
-    if (!pending) return;
-    const reason = ending.reason as { kind?: string; reason?: { kind?: string; reason?: string } } | undefined;
+    if (!pending || pending.scheduled) return;
     const owned = reason?.kind === 'aborted' && reason.reason?.kind === 'hook' && reason.reason.reason === 'dsh-flash-stabilizer: confirmed repetition';
-    this.pending.delete(agent);
-    if (!owned) return;
-    const epoch = pending.epoch;
+    const eligible = pending.mode === 'auto' ? owned
+      : !pending.signal.aborted && (reason?.kind === 'completed' || reason?.kind === 'max-tokens');
+    if (!eligible) { this.pending.delete(agent); return; }
+    pending.scheduled = true;
     // Never await whenIdle from a callback which the driver itself awaits.
     queueMicrotask(() => {
       try {
-        if (this.disposed || epoch !== this.epoch || this.disabled.has(agent.id) || agent.status !== 'idle') return;
+        // Keep the pending identity until dispatch so reset/forget can revoke a
+        // queued microtask, including user input that arrives just after idle.
+        if (this.pending.get(agent) !== pending) return;
+        this.pending.delete(agent);
+        if (this.disposed || this.disabled.has(agent.id) || agent.status !== 'idle') return;
+        if (pending.mode === 'assist' && pending.signal.aborted) return;
         if (!agent.inbox || agent.inbox.nextStep.length || agent.inbox.nextTurn.length) { this.record('user-input-takes-priority', agent); return; }
         agent.followup?.(correction(this.config.language));
         this.record('recovery-submitted', agent);
@@ -62,5 +67,8 @@ export class RecoveryController {
     });
   }
   forget(agent: Agent): void { this.pending.delete(agent); this.attempts.delete(agent.id); this.disabled.delete(agent.id); }
-  dispose(): void { this.disposed = true; this.epoch++; this.pending.clear(); this.attempts.clear(); this.disabled.clear(); }
+  dispose(): void {
+    this.disposed = true;
+    this.pending.clear(); this.attempts.clear(); this.disabled.clear();
+  }
 }

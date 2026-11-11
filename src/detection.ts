@@ -11,9 +11,9 @@ export function periodicSuffix(text: string, minPeriod: number, maxPeriod: numbe
     // Require two different letters (including CJK), rather than alphabet size;
     // punctuation, numeric-only and single-character runs remain unconfirmed.
     if (new Set(unit.match(/\p{L}/gu) ?? []).size < 2) continue;
-    let repeats = 1;
-    while (end - (repeats + 1) * period >= 0 && text.slice(end - (repeats + 1) * period, end - repeats * period) === unit) repeats++;
-    const coverage = repeats * period / text.length;
+    let matched = period;
+    while (matched < end && text.charCodeAt(end - 1 - matched) === text.charCodeAt(end - 1 - (matched % period))) matched++;
+    const repeats = Math.floor(matched / period), coverage = matched / text.length;
     if (repeats >= minRepeats && coverage > best.coverage) best = { period, repeats, coverage };
   }
   return best;
@@ -26,7 +26,7 @@ export function grams(text: string): Set<string> {
   return set;
 }
 export function codeLike(text: string): boolean {
-  return /```|~~~/.test(text) || ((text.match(/[{};=<>]/g)?.length ?? 0) / Math.max(text.length, 1) > 0.08);
+  return /^ {0,3}(?:```|~~~)/m.test(text) || ((text.match(/[{};=<>]/g)?.length ?? 0) / Math.max(text.length, 1) > 0.08);
 }
 export class RepeatDetector {
   private buffer = '';
@@ -50,8 +50,9 @@ export class RepeatDetector {
     const strong = repeat.coverage >= 0.85 && !codeLike(this.buffer);
     // Confirmation requires fresh characters on distinct checks, never repeated checks of one buffer.
     const compatiblePeriod = this.lastConfirmedPeriod === 0 || repeat.period % this.lastConfirmedPeriod === 0 || this.lastConfirmedPeriod % Math.max(repeat.period, 1) === 0;
-    this.consecutive = strong && compatiblePeriod ? this.consecutive + 1 : strong ? 1 : 0;
-    this.lastConfirmedPeriod = strong ? repeat.period : 0;
+    const stable = strong && novelty <= 0.15;
+    this.consecutive = stable && compatiblePeriod ? this.consecutive + 1 : stable ? 1 : 0;
+    this.lastConfirmedPeriod = stable ? repeat.period : 0;
     if (repeat.repeats === 0) return;
     const score = strong ? (novelty <= 0.15 ? 98 : 85) : Math.round(40 + 35 * repeat.coverage);
     return { ...repeat, novelty, score, confirmed: strong && novelty <= 0.15 && this.consecutive >= this.config.confirmations, chars: this.total };

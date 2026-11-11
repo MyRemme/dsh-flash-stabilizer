@@ -1,5 +1,5 @@
 {
-  "testedAt": "2026-11-11T06:06:39.441Z",
+  "testedAt": "2026-11-11T10:36:52.819Z",
   "type": "real-host-core-with-mock-provider",
   "results": [
     {
@@ -15,9 +15,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -35,9 +39,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -55,9 +63,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -75,9 +87,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -95,9 +111,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -115,9 +135,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -135,9 +159,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -155,9 +183,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -175,9 +207,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -195,9 +231,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -215,9 +255,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -235,9 +279,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -255,9 +303,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -275,9 +327,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -295,9 +351,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -315,9 +375,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -335,9 +399,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -355,9 +423,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -375,9 +447,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -395,9 +471,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -415,9 +495,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -435,9 +519,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -455,9 +543,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -475,9 +567,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -495,9 +591,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -515,9 +615,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -540,9 +644,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -560,9 +668,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -580,9 +692,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -600,9 +716,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -620,9 +740,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -645,9 +769,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -665,9 +793,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -685,9 +817,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -705,9 +841,13 @@
         "unload",
         "assist-delivery",
         "assist-budget",
-        "new-user-budget-reset"
+        "new-user-budget-reset",
+        "max-tokens-new-turn",
+        "recovery-tool-result",
+        "assist-user-stop",
+        "no-injected-residue"
       ],
-      "requests": 15,
+      "requests": 19,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true

@@ -8,4 +8,7 @@ it('loads and unloads in the real published DSH AgentLoop and detects actual too
   expect(result.checks).toContain('lossless-chunks');
   expect(result.checks).toContain('tool-results');
   expect(result.checks).toContain('unload');
+  expect(result.checks).toContain('max-tokens-new-turn');
+  expect(result.checks).toContain('recovery-tool-result');
+  expect(result.checks).toContain('assist-user-stop');
 }, 35000);

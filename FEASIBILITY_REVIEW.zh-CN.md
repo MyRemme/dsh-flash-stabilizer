@@ -1,7 +1,7 @@
 # DSH Flash Stabilizer 可行性审查
 
 审查日期：2026-11-11（Asia/Shanghai）  
-审查对象：`%USERPROFILE%/Downloads/DSH Flash Stabilizer.md`  
+审查对象：`DSH Flash Stabilizer.md`（原始设计规划文档）
 官方源码基线：DeepSeek Harness `0.2.2-rc.1`，提交 `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`。
 
 ## 结论

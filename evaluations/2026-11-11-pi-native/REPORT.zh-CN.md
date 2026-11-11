@@ -91,7 +91,7 @@
 
 ## 本地证据与复跑
 
-原始证据目录：`.\.compat-cache\pi-native\2026-11-11T04-13-46-035Z-baseline`（受 Git 忽略，不发布原始响应）。包括每次的 `.wire-request.json`、`.payload.json`、`.raw-response.json`、`.message.json`、`.answer.txt`、`.events.jsonl` 和总体 `results.json`。
+原始证据目录：`.compat-cache/pi-native/2026-11-11T04-13-46-035Z-baseline`（受 Git 忽略，不发布原始响应）。包括每次的 `.wire-request.json`、`.payload.json`、`.raw-response.json`、`.message.json`、`.answer.txt`、`.events.jsonl` 和总体 `results.json`。
 
 使用已配置好的 Pi 连接：
 
