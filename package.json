@@ -24,6 +24,7 @@
     "compatibility",
     "cordis.patch.yml",
     "README.md",
+    "PRIVACY_REVIEW.zh-CN.md",
     "FEASIBILITY_REVIEW.zh-CN.md",
     "scripts/diagnose.mjs",
     "LICENSE"

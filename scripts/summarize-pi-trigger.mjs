@@ -88,7 +88,7 @@ const summary={startedAt:batch.startedAt,completedAt:batch.completedAt,piVersion
 const output=join(root,'evaluations',`${batch.startedAt.slice(0,10)}-pi-trigger`);await mkdir(output,{recursive:true});
 const packagePath=join(root,'artifacts/dsh-flash-stabilizer-0.1.0.tgz');
 const hosts=JSON.parse(await readFile(join(root,'compatibility/host-results.json'),'utf8'));
-const packageValidation={path:packagePath,sha256:createHash('sha256').update(await readFile(packagePath)).digest('hex'),
+const packageValidation={path:relative(root,packagePath).replaceAll('\\','/'),sha256:createHash('sha256').update(await readFile(packagePath)).digest('hex'),
   hostTestedAt:hosts.testedAt,passed:hosts.results.filter(x=>x.status==='passed').length,
   unavailable:hosts.results.filter(x=>x.status==='unavailable').length,failed:hosts.results.filter(x=>x.status==='failed').length,
   hostProvider:'Deterministic mock provider in real DSH cores, separate from the Pi model test'};
@@ -139,7 +139,7 @@ ${table}
 
 参考：[deepseek-recipe #24](https://github.com/deepseek-ai/deepseek-recipe/issues/24)、[vLLM #62935](https://github.com/vllm-project/vllm/issues/62935)、[DSH discussion #11943](https://github.com/deepseek-ai/deepseek-harness/discussions/11943)。这些案例没有提供完整公开失败历史，因此本轮是条件类比，不是原请求复现，也不是采样器根因验证。
 
-原始证据目录：\`${directory}\`（受Git忽略）。每组保存初始显式上下文、后续实际HTTP请求、原始响应、模型消息、增量与工具结果；本报告 \`summary.json\` 包含逐请求核验、检测证据和哈希。
+原始证据目录：\`${relative(root,directory).replaceAll('\\','/')}\`（受Git忽略）。每组保存初始显式上下文、后续实际HTTP请求、原始响应、模型消息、增量与工具结果；本报告 \`summary.json\` 包含逐请求核验、检测证据和哈希。
 
 复跑（会发生模型费用）：
 

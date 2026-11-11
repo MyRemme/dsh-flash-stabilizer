@@ -10687,7 +10687,7 @@
     }
   ],
   "packageValidation": {
-    "path": ".\\artifacts\\dsh-flash-stabilizer-0.1.0.tgz",
+    "path": "artifacts/dsh-flash-stabilizer-0.1.0.tgz",
     "sha256": "034f0ca27974b579a275b25a2a832c6903d012925f60858ed8c64308acca8e5e",
     "hostTestedAt": "2026-11-11T04:41:03.036Z",
     "passed": 35,

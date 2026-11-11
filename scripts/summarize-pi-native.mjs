@@ -88,13 +88,16 @@ if (process.argv[3]) {
     repeatedByDetector: r.repetition.confirmedByCurrentDetector,
     doneMarkerCaptured: raw.some(x=>(x.body ?? '').includes('data: [DONE]')),
     rawResponseReadErrors: raw.map(x=>x.readError).filter(Boolean),
-    rawDirectory: diagnosticInput,
+    rawDirectory: relative(root, diagnosticInput).replaceAll('\\', '/'),
   };
   await writeFile(join(output, 'stream-diagnostic.json'), JSON.stringify(diagnostic, null, 2));
 } else {
   try {
     const prior = JSON.parse(await readFile(join(output, 'stream-diagnostic.json'), 'utf8'));
-    if (prior.baselineStartedAt === batch.startedAt) diagnostic = prior;
+    if (prior.baselineStartedAt === batch.startedAt) {
+      diagnostic = prior;
+      if (typeof diagnostic.rawDirectory === 'string' && isAbsolute(diagnostic.rawDirectory)) diagnostic.rawDirectory = relative(root, diagnostic.rawDirectory).replaceAll('\\', '/');
+    }
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
 }
 if (diagnostic) summary.streamDiagnostic = diagnostic;
@@ -171,7 +174,7 @@ ${diagnostic ? `## 补充一次原始流诊断（不计入上述20次）
 
 ## 本地证据与复跑
 
-原始证据目录：\`${input}\`（受 Git 忽略，不发布原始响应）。包括每次的 \`.wire-request.json\`、\`.payload.json\`、\`.raw-response.json\`、\`.message.json\`、\`.answer.txt\`、\`.events.jsonl\` 和总体 \`results.json\`。
+原始证据目录：\`${relative(root, input).replaceAll('\\', '/')}\`（受 Git 忽略，不发布原始响应）。包括每次的 \`.wire-request.json\`、\`.payload.json\`、\`.raw-response.json\`、\`.message.json\`、\`.answer.txt\`、\`.events.jsonl\` 和总体 \`results.json\`。
 
 使用已配置好的 Pi 连接：
 

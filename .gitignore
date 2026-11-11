@@ -6,3 +6,15 @@ artifacts/
 coverage/
 *.tgz
 *.log
+.env
+.env.*
+!.env.example
+.credentials*
+auth.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.wire-request.json
+*.raw-response.json
+*.payload.json
