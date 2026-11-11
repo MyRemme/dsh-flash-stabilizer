@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { defaults, resolveSettings, Config } from '../src/config.js';
 import { StreamMonitor } from '../src/monitor.js';
-import { periodicSuffix } from '../src/detection.js';
+import { periodicSuffix, RepeatDetector } from '../src/detection.js';
+import { FenceFilter } from '../src/fences.js';
 import { chunks, repeated } from './helpers.js';
 
 describe('repeat evidence', () => {
@@ -22,6 +23,37 @@ describe('repeat evidence', () => {
       chunks(unit.repeat(1200), size).forEach(c => monitor.push(c));
       expect(events.filter(e => e.confirmed)).toHaveLength(1);
     }
+  });
+  it.each(['a!b?', '𐐀!𐐁?', '𐐀!a?', 'a!𐐀?'])('preserves the shortest full-coverage period with Unicode letters: %s', unit => {
+    const text = unit.repeat(300);
+    const period = Math.ceil(16 / unit.length) * unit.length;
+    expect(periodicSuffix(text, 16, 512, 6)).toEqual({ period, repeats: Math.floor(text.length / period), coverage: 1 });
+  });
+  it('does not count a clipped surrogate or repeated copies of one letter as two letters', () => {
+    for (const unit of ['𐐀!', 'a!', '123!', '。。。']) {
+      expect(periodicSuffix(unit.repeat(300), 16, 512, 6)).toEqual({ period: 0, repeats: 0, coverage: 0 });
+    }
+  });
+  it('stops inspecting the current delta and all later chunks once confirmed', () => {
+    const inspect = vi.spyOn(RepeatDetector.prototype, 'push');
+    const filter = vi.spyOn(FenceFilter.prototype, 'push');
+    try {
+      let confirmedAt = 0;
+      const monitor = new StreamMonitor(defaults, e => { if (e.confirmed) confirmedAt = inspect.mock.calls.length; });
+      monitor.push({ type: 'reasoning-delta', index: 0, text: repeated.repeat(20) });
+      expect(confirmedAt).toBeGreaterThan(0);
+      expect(inspect).toHaveBeenCalledTimes(confirmedAt);
+      const filtered = filter.mock.calls.length;
+      for (const chunk of chunks(repeated.repeat(20), 4096)) monitor.push(chunk);
+      expect(inspect).toHaveBeenCalledTimes(confirmedAt);
+      expect(filter).toHaveBeenCalledTimes(filtered);
+    } finally { inspect.mockRestore(); filter.mockRestore(); }
+  });
+  it('can stop fence parsing immediately when its consumer is done', () => {
+    const filter = new FenceFilter();
+    const emitted: string[] = [];
+    filter.push('ordinary text\n'.repeat(10000), text => { emitted.push(text); return emitted.length < 3; }, () => {});
+    expect(emitted.join('')).toBe('ord');
   });
   it.each(['哈。', '1234567890'])('does not confirm single-letter or numeric-only spam: %s', unit => {
     const events: { confirmed: boolean }[] = [];

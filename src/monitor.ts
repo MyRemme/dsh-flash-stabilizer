@@ -16,6 +16,7 @@ export class StreamMonitor {
   private reported = false;
   constructor(private readonly config: Settings, private readonly report: (e: RepeatEvidence) => void) {}
   push(chunk: Chunk): void {
+    if (this.reported) return;
     if (chunk.type === 'finish') { this.blocks.clear(); return; }
     if (!['block-start', 'reasoning-delta', 'text-delta', 'block-end'].includes(chunk.type) || !Number.isSafeInteger(chunk.index)) return;
     const index = chunk.index!;
@@ -33,7 +34,7 @@ export class StreamMonitor {
     if (chunk.type === 'block-end') {
       // Adapters may emit only block-end; don't count text twice after deltas.
       if (!block.seen && (chunk.block?.type === 'text' || chunk.block?.type === 'reasoning')) this.feed(block, chunk.block.text ?? '');
-      block.filter.finish(text => this.inspect(block!, text));
+      if (!this.reported) block.filter.finish(text => this.inspect(block!, text));
       block.closed = true;
       return;
     }
@@ -43,19 +44,19 @@ export class StreamMonitor {
   }
   private feed(block: BlockState, text: string): void {
     let plain = '';
-    const flush = () => { if (plain) this.inspect(block, plain); plain = ''; };
+    const flush = () => { if (plain) this.inspect(block, plain); plain = ''; return !this.reported; };
     block.filter.push(text, segment => {
       plain += segment;
-      if (plain.length >= this.config.checkEveryChars) flush();
+      if (plain.length >= this.config.checkEveryChars) return flush();
     }, () => { plain = ''; block.detector = new RepeatDetector(this.config); });
     flush();
   }
   private inspect(block: BlockState, text: string): void {
-    for (let offset = 0; offset < text.length; offset += this.config.checkEveryChars) {
+    for (let offset = 0; !this.reported && offset < text.length; offset += this.config.checkEveryChars) {
       const result = block.detector.push(text.slice(offset, offset + this.config.checkEveryChars));
       if (result && !this.reported) {
         // Suspicion stays observable; only one confirmed incident per attempt.
-        if (result.confirmed) this.reported = true;
+        if (result.confirmed) { this.reported = true; this.blocks.clear(); }
         this.report(result);
       }
     }

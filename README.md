@@ -1,10 +1,11 @@
-# DSH Flash Stabilizer 0.1.1
+# DSH Flash Stabilizer 0.1.2
 
 DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正文和重复工具结果，提供可选的有限软纠正。包内含构建产物，安装时不需要编译。
 
 ## 当前可用功能
 
 - 流式检测确定性周期重复，包括“好。执行。好。”一类短句轮转；按会话、模型请求和内容块隔离，连续多次观测后确认。
+- 同次请求确认重复后释放检测窗口、停止后续扫描，仍原样转发全部输出；重叠流分别绑定请求状态，旧流结束不会清除新流监控。
 - 排除工具参数 JSON，跳过 Markdown 代码围栏，降低重复模板代码的敏感度。
 - 对五分钟内相同工具、相同参数且结果不变的重复执行告警。结果变化会重置该指纹的计数。
 - `observe` 默认只告警；`assist` 在确认重复后等待当前回合正常结束或耗尽输出，再通过宿主 `agent.followup()` 开启独立纠正回合，每个用户任务最多两次。错误、用户停止、新用户输入、禁用会话或卸载会取消待执行的纠正，不向当前步骤注入消息。
@@ -45,7 +46,7 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.1.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.2.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -124,10 +125,12 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.1.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.2.tgz
 ```
 
-`npm run check` 包含类型检查、构建及 121 项自动化测试，包含真实 React / DOM 中的面板交互及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
+`npm run check` 包含类型检查、构建及 131 项自动化测试，包含真实 React / DOM 中的面板交互及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
+
+优化前构建可保存在仓库外或 `.compat-cache/`，用 `node scripts/benchmark-detection.mjs '<旧版 dist 目录>'` 对照 10,100 组输入及长流告警结果，并测量本地检测耗时。这是检测器基准，不是模型生成速度、Token 消耗或恢复质量测试。
 
 上述自动化和兼容性测试使用确定性输出，不需要 API Key。源码在 `src/`，测试在 `tests/`，审查报告在 [FEASIBILITY_REVIEW.zh-CN.md](FEASIBILITY_REVIEW.zh-CN.md)，每版本接口来源及 SHA 在 `compatibility/releases.json`。
 

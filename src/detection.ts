@@ -5,16 +5,22 @@ export interface RepeatEvidence { period: number; repeats: number; coverage: num
 /** Exact suffix periodicity plus window overlap. Scores are heuristics, not probabilities. */
 export function periodicSuffix(text: string, minPeriod: number, maxPeriod: number, minRepeats: number) {
   let best = { period: 0, repeats: 0, coverage: 0 };
-  for (let period = minPeriod; period <= Math.min(maxPeriod, Math.floor(text.length / minRepeats)); period++) {
-    const end = text.length, unit = text.slice(end - period);
-    // Short Chinese phrases can have fewer than six distinct characters.
-    // Require two different letters (including CJK), rather than alphabet size;
-    // punctuation, numeric-only and single-character runs remain unconfirmed.
-    if (new Set(unit.match(/\p{L}/gu) ?? []).size < 2) continue;
+  const end = text.length, limit = Math.min(maxPeriod, Math.floor(end / minRepeats));
+  if (limit < minPeriod) return best;
+  // A suffix contains two distinct letters exactly when it includes the last
+  // letter before the final run of identical letters. Scan Unicode only once.
+  let lastLetter = '', lastIndex = -1, distinctIndex = -1;
+  for (const match of text.slice(end - limit).matchAll(/\p{L}/gu)) {
+    if (match[0] !== lastLetter) distinctIndex = lastIndex;
+    lastLetter = match[0]; lastIndex = match.index;
+  }
+  if (distinctIndex < 0) return best;
+  for (let period = Math.max(minPeriod, limit - distinctIndex); period <= limit; period++) {
     let matched = period;
-    while (matched < end && text.charCodeAt(end - 1 - matched) === text.charCodeAt(end - 1 - (matched % period))) matched++;
+    while (matched < end && text.charCodeAt(end - 1 - matched) === text.charCodeAt(end - 1 - matched + period)) matched++;
     const repeats = Math.floor(matched / period), coverage = matched / text.length;
     if (repeats >= minRepeats && coverage > best.coverage) best = { period, repeats, coverage };
+    if (best.coverage === 1) break;
   }
   return best;
 }

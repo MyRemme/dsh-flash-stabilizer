@@ -1,6 +1,6 @@
 {
   "name": "dsh-flash-stabilizer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DSH Flash 推理重复监控、工具重复告警与有限软纠正插件",
   "type": "module",
   "license": "MIT",

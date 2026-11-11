@@ -101,9 +101,9 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     if (disposed || !monitoring || !state?.enabled || !selected(options) || options.purpose || !options.signal || options.signal !== state.signal) return upstream;
     return (async function* () {
       const signal = options.signal!;
-      let active = false;
+      let request: SessionState['request'];
       guarded(() => {
-        if (!monitoring || !state.enabled) return;
+        if (!monitoring || !state.enabled || states.get(state.agent.id) !== state || signal !== state.signal) return;
         const monitor = new StreamMonitor(config, evidence => {
           const key = evidence.confirmed ? 'confirmed' : 'suspected';
           if (!state.noticeKeys.has(key)) {
@@ -113,16 +113,22 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
           if (evidence.confirmed) recovery.request(state.agent, signal, compatibility.intervention);
         });
         state.noticeKeys.clear();
-        state.request = { monitor, signal, ...(state.frameId ? { frameId: state.frameId } : {}) };
-        active = true;
+        request = { monitor, signal, ...(state.frameId ? { frameId: state.frameId } : {}) };
+        state.request = request;
         monitoredRequests++; lastMonitoredAt = new Date().toISOString();
       });
+      const ownRequest = request;
       try {
         for await (const chunk of upstream) {
-          if (compatibility.adapter === 'stream-waterfall' && active) guarded(() => state.request?.monitor.push(chunk));
+          if (compatibility.adapter === 'stream-waterfall' && ownRequest && state.request === ownRequest) guarded(() => ownRequest.monitor.push(chunk));
           yield chunk;
         }
-      } finally { if (active) { finishedRequests++; delete state.request; } }
+      } finally {
+        if (ownRequest) {
+          finishedRequests++;
+          if (state.request === ownRequest) delete state.request;
+        }
+      }
     })();
   });
 
