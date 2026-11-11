@@ -2,7 +2,7 @@
 
 本轮 20 个样本中，1 个原始结束原因为 length，3 个没有最终正文；当前周期检测器确认 0 个。请求无附加提示审计全部通过。这些结果只描述本轮表现，不能据此归因采样器，也不能证明插件能改善模型输出。
 
-仅使用 Pi 1.5.0 的底层 ModelRuntime，复用用户已确认的官方 DeepSeek-V4.1-Flash 连接，模型标识为 `deepseek-flash`。不经过 CLI 或 AgentSession。
+仅使用 Pi 1.5.0 的底层 ModelRuntime，复用用户已确认的官方 DeepSeek Flash 连接。根据保存的 HTTP 请求，公开模型名为 `deepseek-flash`；原始 model 字段带有路由前缀，发布时隐去，不将脱敏后的名称冒充原始字段全文。不经过 CLI 或 AgentSession。配置显示名不作为服务端权重版本证明。
 
 ## 实际请求审计
 

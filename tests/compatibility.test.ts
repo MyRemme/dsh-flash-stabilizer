@@ -34,12 +34,13 @@ it('ignores auxiliary requests and other models', async () => {
   }
   expect(host.status().counts['stream-repeat'] ?? 0).toBe(0);
 });
-it.each(['deepseek-v4.1-flash', 'fixture:deepseek-v4.1-flash', 'fixture/nested/deepseek-v4.1-flash'])('observes the real Flash route %s', async model => {
+// Invented namespaces exercise routing; these are not live model requests.
+it.each(['deepseek-flash', 'fixture:deepseek-flash', 'fixture/nested/deepseek-flash'])('observes a synthetic Flash route %s', async model => {
   const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
   await stream(host, makeAgent(), chunks(repeated), false, { model });
   expect(host.status().counts['stream-repeat']).toBeGreaterThanOrEqual(1);
 });
-it.each(['fixture:deepseek-v4.1-flash-extra', 'fixture:some-deepseek-v4.1-flash'])('does not match a partial Flash name %s', async model => {
+it.each(['fixture:deepseek-flash-extra', 'fixture:some-deepseek-flash'])('does not match a partial Flash name %s', async model => {
   const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
   await stream(host, makeAgent(), chunks(repeated), false, { model });
   expect(host.status().counts['stream-repeat'] ?? 0).toBe(0);

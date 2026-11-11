@@ -130,12 +130,12 @@ dsh plugin --profile desktop remove dsh-flash-stabilizer
     mode: assist
     models: [deepseek-flash, deepseek-v4-flash, deepseek-v4.1-flash, deepseek-v4-flash-vision-exp]
     maxRecoveries: 2
-    logDir: 'D:/DSH-Logs/flash-stabilizer'
+    logDir: './dsh-logs/flash-stabilizer'
 ```
 
 该 patch 替换此行的整个 config；未写字段由插件默认值补齐。更高优先级的 home patch 或 `--patch` 仍可覆盖它。修改后按宿主支持的方式重新加载配置或重启。
 
-模型匹配使用 DSH 请求中的**模型标识**，不使用界面显示名称。可精确匹配整个标识，或匹配 `/`、`:` 分隔后的末段，例如默认覆盖 `fixture:deepseek-v4.1-flash` 和 `fixture/nested/deepseek-v4.1-flash`；其他别名应加进 `models`。`providers` 为空表示不限制提供方；不会观察压缩等带 `purpose` 的辅助请求。
+模型匹配使用 DSH 请求中的**模型标识**，不使用界面显示名称。可精确匹配整个标识，或匹配 `/`、`:` 分隔后的末段。官方 API 模型名为 `deepseek-flash`；其余默认值是兼容别名，不代表模型测试实际使用的名称或版本。文档不公布本地路由前缀，模拟测试只使用虚构命名空间。`providers` 为空表示不限制提供方；不会观察压缩等带 `purpose` 的辅助请求。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|
@@ -173,7 +173,7 @@ ctx.flashStabilizer.setSessionEnabled(sessionId, true)
 
 ## 隐私与仓库内容
 
-源码仓库保持私有。跟踪内容包括插件代码、合成测试与去标识评估汇总；原始 DSH 会话、请求/响应、凭据与本机安装回执保留在受忽略目录。汇总仍包含测试时间、模型、用量和哈希，并非完全匿名。已清理当前报告中的本机用户名和绝对路径；旧提交中的路径仍存在，尚未重写历史。审查范围、发现及处理见 [隐私审查报告](PRIVACY_REVIEW.zh-CN.md)。
+源码仓库保持私有。跟踪内容包括插件代码、合成测试与去标识评估汇总；原始 DSH 会话、请求/响应、凭据与本机安装回执保留在受忽略目录。汇总仍包含测试时间、公开模型名、用量和哈希，并非完全匿名。本机用户名、绝对路径及本地模型/提供方路由不进入当前发布报告。旧提交仍保留历史标识，尚未重写历史；审查范围、发现及处理见 [隐私审查报告](PRIVACY_REVIEW.zh-CN.md)。
 
 ## 日志与误告警
 
@@ -195,7 +195,7 @@ npm pack --pack-destination artifacts --cache .npm-cache
 node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.3.tgz
 ```
 
-`npm run check` 包含类型检查、构建及 144 项自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
+`npm run check` 包含类型检查、构建及自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
 
 优化前构建可保存在仓库外或 `.compat-cache/`，用 `node scripts/benchmark-detection.mjs '<旧版 dist 目录>'` 对照 10,100 组输入及长流告警结果，并测量本地检测耗时。这是检测器基准，不是模型生成速度、Token 消耗或恢复质量测试。
 
@@ -203,7 +203,7 @@ node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.3.tgz
 
 ### 真实模型的原生基线
 
-`scripts/test-pi-native.mjs` 通过本地 Pi 的底层 `ModelRuntime`，复用已配置的 DeepSeek Flash 连接。它不创建 AgentSession；实际 HTTP 请求必须只有一条与测试题逐字相同的 user 消息，不带系统提示、项目上下文、技能、扩展、工具、历史或 `@文件` 包装。发现额外输入立即停止；本插件不介入请求。
+`scripts/test-pi-native.mjs` 通过本地 Pi 的底层 `ModelRuntime`，复用已配置且由用户确认的官方 DeepSeek Flash 连接。请求的 `model` 固定为官方 API 名 `deepseek-flash`，在实际 HTTP 边界再次检查，不把本地路由别名当作模型版本。它不创建 AgentSession；实际 HTTP 请求必须只有一条与测试题逐字相同的 user 消息，不带系统提示、项目上下文、技能、扩展、工具、历史或 `@文件` 包装。发现额外输入立即停止；本插件不介入请求。
 
 ```powershell
 node scripts/test-pi-native.mjs smoke
@@ -213,7 +213,7 @@ node scripts/summarize-pi-native.mjs '<输出的原始证据目录>'
 
 smoke 发送 1 次真实请求；baseline 默认发送 20 次，high/max 各重复两次，每次输出上限 16,384 token、180 秒超时、零重试。它们会产生模型费用，不属于 `npm test`。原始请求与响应放在受 Git 忽略的 `.compat-cache/pi-native/`；报告器离线复核请求及题目哈希，输出到 `evaluations/`。校验串与上下文回答另需人工复核，详情见 [原生测试报告](evaluations/2026-11-11-pi-native/REPORT.zh-CN.md)。
 
-可用 `PI_NATIVE_CASES`、`PI_NATIVE_EFFORTS`、`PI_NATIVE_REPEATS`、`PI_NATIVE_MAX_TOKENS` 缩小批次；Windows 默认读取 `%APPDATA%/npm/node_modules/@earendil-works/pi-coding-agent` 与 `%USERPROFILE%/.pi/agent`，可通过 `PI_NATIVE_PACKAGE_DIR`、`PI_NATIVE_CONFIG_DIR` 指定。脚本不修改用户配置，不写入鉴权头。
+可用 `PI_NATIVE_CASES`、`PI_NATIVE_EFFORTS`、`PI_NATIVE_REPEATS`、`PI_NATIVE_MAX_TOKENS` 缩小批次；Windows 默认读取 `%APPDATA%/npm/node_modules/@earendil-works/pi-coding-agent` 与 `%USERPROFILE%/.pi/agent`，可通过 `PI_NATIVE_PACKAGE_DIR`、`PI_NATIVE_CONFIG_DIR` 指定。脚本不修改用户配置，不写入鉴权头。2026-11-12 使用官方 API 模型名的补测返回 HTTP 401，未产生模型输出，不能计为通过，见[请求记录](evaluations/2026-11-12-official-model/REPORT.zh-CN.md)。
 
 `scripts/test-pi-live.mjs` 是早期的 Agent 探索测试，含中性系统提示和文件输入包装，其结果不计入原生基线。这里的纯模型测试也不等于插件干预有效性测试。
 

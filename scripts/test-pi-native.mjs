@@ -33,6 +33,7 @@ const runtime = await ModelRuntime.create({
 });
 const model = runtime.getModel(settings.defaultProvider, settings.defaultModel);
 if (!model || !/deepseek.*flash/i.test(model.id)) throw Error('Configured Pi default must be DeepSeek Flash');
+const requestModel = 'deepseek-flash';
 const auth = await runtime.getAuth(model);
 const secret = auth?.auth?.apiKey;
 if (typeof secret !== 'string' || !secret) throw Error('Existing configured model credential unavailable');
@@ -76,6 +77,7 @@ if (!efforts.every(x => ['high', 'max'].includes(x)) || !Number.isSafeInteger(re
 const manifest = {
   startedAt: new Date().toISOString(), phase, piVersion, provider: model.provider, model: model.id,
   connection: 'Existing Pi connection; official as confirmed by user, upstream not re-investigated',
+  requestModel, modelFieldPolicy: 'Official API model name forced at adapter boundary; asserted again at HTTP boundary',
   entryPoint: 'Pi ModelRuntime.streamSimple, without CLI or AgentSession',
   systemPrompt: false, contextFiles: false, tools: false, extensions: false, skills: false,
   messagePolicy: 'Exactly one user message; text must equal the case prompt at adapter and HTTP boundaries',
@@ -98,7 +100,7 @@ const manifest = {
 let results = [];
 if (process.env.PI_NATIVE_RESUME_DIR) {
   const prior = JSON.parse(await readFile(join(directory, 'results.json'), 'utf8'));
-  if (prior.model !== model.id || prior.maxTokens !== maxTokens || JSON.stringify(prior.runPlan) !== JSON.stringify(manifest.runPlan)) throw Error('Resume configuration differs');
+  if (prior.model !== model.id || prior.requestModel !== requestModel || prior.maxTokens !== maxTokens || JSON.stringify(prior.runPlan) !== JSON.stringify(manifest.runPlan)) throw Error('Resume configuration differs');
   results = prior.results; manifest.startedAt = prior.startedAt;
 }
 await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2));
@@ -107,6 +109,7 @@ await writeFile(join(directory, 'cases.json'), JSON.stringify(cases, null, 2));
 console.log(JSON.stringify({ directory, planned: runs.length, policy: manifest.messagePolicy }));
 
 function assertPayload(payload, prompt) {
+  if (payload.model !== requestModel) throw Error('MODEL: expected official API model name');
   const messages = payload.messages;
   if (!Array.isArray(messages) || messages.length !== 1 || messages[0].role !== 'user') throw Error('ISOLATION: expected exactly one user message');
   if (Object.keys(messages[0]).some(k => !['role', 'content'].includes(k))) throw Error('ISOLATION: unexpected message metadata');
@@ -173,6 +176,7 @@ for (let i = 0; i < runs.length; i++) {
       },
       onPayload: async payload => {
         if (++payloadCalls > 1) throw Error('ISOLATION: repeated payload');
+        payload.model = requestModel;
         check(payload, 'adapter');
         await writeFile(join(directory, `${name}.payload.json`), JSON.stringify(payload, null, 2));
         return undefined;
@@ -249,3 +253,4 @@ for (let i = 0; i < runs.length; i++) {
   }
 }
 console.log(JSON.stringify({ results: join(directory, 'results.json'), completed: results.length, planned: runs.length }));
+if (results.length !== runs.length || results.some(r => !r.isolationPassed || r.timedOut || r.httpStatus.some(status => status >= 400) || (r.error && !r.truncated))) process.exitCode = 1;

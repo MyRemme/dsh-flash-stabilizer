@@ -3,6 +3,16 @@
   "completedAt": "2026-11-11T04:38:11.133Z",
   "piVersion": "1.5.0",
   "model": "deepseek-flash",
+  "modelIdentity": {
+    "source": "Saved HTTP request model fields; provider connection confirmed by user",
+    "requestsAudited": 47,
+    "publicNames": [
+      "deepseek-flash"
+    ],
+    "localRouteRedacted": true,
+    "exactWireModelPublished": false,
+    "serverWeightRevisionVerified": false
+  },
   "planned": 10,
   "completed": 10,
   "requests": 47,

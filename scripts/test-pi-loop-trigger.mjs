@@ -20,6 +20,7 @@ await mkdir(directory, { recursive: true });
 const runtime = await ModelRuntime.create({ modelsPath: join(userPi, 'models.json'), authPath: join(userPi, 'auth.json'), modelsStorePath: join(directory, 'models-store.json'), allowModelNetwork: false, refreshOnCreate: false });
 const model = runtime.getModel(settings.defaultProvider, settings.defaultModel);
 if (!model || !/deepseek.*flash/i.test(model.id)) throw Error('Existing configured Pi default must be DeepSeek Flash');
+const requestModel = 'deepseek-flash';
 const secret = (await runtime.getAuth(model))?.auth?.apiKey;
 if (typeof secret !== 'string' || !secret) throw Error('Configured credential missing');
 const redact = text => String(text).replaceAll(secret, '[REDACTED]');
@@ -79,6 +80,7 @@ function readText(content) {
   return (content ?? []).filter(x=>x.type==='text').map(x=>x.text).join('\n');
 }
 function assertWire(payload, messages) {
+  if(payload.model!==requestModel)throw Error('MODEL: expected official API model name');
   if (!Array.isArray(payload.messages) || payload.messages.length!==messages.length) throw Error('ISOLATION: extra or missing history message');
   for (let i=0;i<messages.length;i++) {
     const expected=messages[i], got=payload.messages[i], role=expected.role==='toolResult'?'tool':expected.role;
@@ -109,6 +111,7 @@ function analyze(message) {
   return {thinkingChars:thinking.length,finalChars:text.length,reasoningCycleConfirmed:events.some(e=>e.confirmed),cycleEvidence:events, toolCalls:(message?.content??[]).filter(c=>c.type==='toolCall').length};
 }
 const manifest={startedAt:new Date().toISOString(),piVersion:JSON.parse(await readFile(join(piRoot,'package.json'),'utf8')).version,model:model.id,
+  requestModel,modelFieldPolicy:'Official API model name forced at adapter boundary; asserted again at HTTP boundary',
   method:'Direct Pi ModelRuntime with declared synthetic conversation and three virtual tools; no AgentSession',
   noSystemPrompt:true,noContextFileDiscovery:true,noSkills:true,noExtensions:true,noRecoveryOrIntervention:true,
   historyProvenance:'Synthetic clean completed-task history, not a public original failing transcript; no loop exemplars or failed reasoning seeded',
@@ -146,7 +149,7 @@ for(let run=0;run<runs.length;run++) {
     };
     try {
       const stream=runtime.streamSimple(model,{messages,tools},{reasoning:r.effort,maxTokens,maxRetries:0,timeoutMs,signal,
-        onPayload:body=>{if(++payloadCalls!==1)throw Error('Repeated payload');audit(body,'adapter');},
+        onPayload:body=>{if(++payloadCalls!==1)throw Error('Repeated payload');body.model=requestModel;audit(body,'adapter');},
         fetch:async(input,init)=>{
           if(++httpCalls!==1)throw Error('HTTP request budget exceeded');
           const body=typeof init?.body==='string'?init.body:input instanceof Request?await input.clone().text():null;

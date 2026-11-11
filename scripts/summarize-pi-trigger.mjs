@@ -4,6 +4,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { publicModelName, modelProvenance, sanitizeReport } from './report-privacy.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)), directory=resolve(process.argv[2]??'');
 const rel=relative(join(root,'.compat-cache/pi-trigger'),directory);
 if(!rel||rel.startsWith('..')||isAbsolute(rel))throw Error('Specify a pi-trigger run directory');
@@ -35,11 +36,13 @@ assert(lexicalCycle('Write. Output! Let me write; '.repeat(100)).confirmed);
 assert(!lexicalCycle(Array.from({length:200},(_,i)=>`Evidence ${i} excludes case ${i*i}; next inspect module ${i+1}.`).join(' ')).confirmed);
 
 const rows=[];
+const wireModels=[];
 for(const trial of batch.results){
   const dir=join(directory,trial.name), initial=JSON.parse(await readFile(join(dir,'initial-context.json'),'utf8'));
   const events=JSON.parse(await readFile(join(dir,'tool-events.json'),'utf8')), expected=[...initial.messages],attempts=[];
   for(const a of trial.attempts){
     const id=String(a.step).padStart(2,'0'),bytes=await readFile(join(dir,`${id}.request.json`),'utf8'),body=JSON.parse(bytes);
+    wireModels.push(body.model);
     assert.equal(body.messages.length,expected.length,'message count');
     assert(a.isolationPassed&&a.audits.length===2&&a.audits.every(x=>x.bodySha256===sha(bytes)),'runtime audit');
     assert.equal(body.reasoning_effort,trial.effort,'effort');
@@ -78,7 +81,7 @@ for(const trial of batch.results){
     fixtureModuleFeedback:events.filter(e=>e.name==='bench_test'&&/module is not defined|Unexpected token 'export'/.test(e.result.reason??'')).map(e=>({step:e.step,reason:e.result.reason}))});
 }
 const attempts=rows.flatMap(r=>r.attempts);
-const summary={startedAt:batch.startedAt,completedAt:batch.completedAt,piVersion:batch.piVersion,model:batch.model,planned:batch.planned,completed:rows.length,
+const summary={startedAt:batch.startedAt,completedAt:batch.completedAt,piVersion:batch.piVersion,model:publicModelName(wireModels[0]),modelIdentity:modelProvenance(wireModels),planned:batch.planned,completed:rows.length,
   requests:attempts.length,independentAuditPassed:attempts.filter(a=>a.independentAuditPassed).length,
   targetCandidates:rows.filter(r=>r.targetCandidate).length,strictNoAction:rows.filter(r=>r.strictNoAction).length,
   requestBudgetLimited:rows.filter(r=>r.trialStop==='request-budget').length,
@@ -88,12 +91,15 @@ const summary={startedAt:batch.startedAt,completedAt:batch.completedAt,piVersion
 const output=join(root,'evaluations',`${batch.startedAt.slice(0,10)}-pi-trigger`);await mkdir(output,{recursive:true});
 const packagePath=join(root,'artifacts/dsh-flash-stabilizer-0.1.0.tgz');
 const hosts=JSON.parse(await readFile(join(root,'compatibility/host-results.json'),'utf8'));
-const packageValidation={path:relative(root,packagePath).replaceAll('\\','/'),sha256:createHash('sha256').update(await readFile(packagePath)).digest('hex'),
+let prior;
+try { prior=JSON.parse(await readFile(join(output,'summary.json'),'utf8')); } catch(e) { if(e.code!=='ENOENT')throw e; }
+// Re-reporting must not replace historical package evidence with today's build.
+const packageValidation=prior?.startedAt===batch.startedAt&&prior.packageValidation?prior.packageValidation:{path:relative(root,packagePath).replaceAll('\\','/'),sha256:createHash('sha256').update(await readFile(packagePath)).digest('hex'),
   hostTestedAt:hosts.testedAt,passed:hosts.results.filter(x=>x.status==='passed').length,
   unavailable:hosts.results.filter(x=>x.status==='unavailable').length,failed:hosts.results.filter(x=>x.status==='failed').length,
   hostProvider:'Deterministic mock provider in real DSH cores, separate from the Pi model test'};
 summary.packageValidation=packageValidation;
-await writeFile(join(output,'summary.json'),JSON.stringify(summary,null,2));
+await writeFile(join(output,'summary.json'),JSON.stringify(sanitizeReport(summary),null,2));
 const table=rows.map(r=>`| ${r.task} / ${r.profile} | ${r.attempts[0]?.rawUsage?.prompt_tokens??r.attempts[0]?.usage?.input??'缺失'} | ${r.attempts.length} | ${r.toolCalls} | ${r.passed} | ${r.targetCandidate} | ${r.strictNoAction} | ${r.trialStop} |`).join('\n');
 const report=`# 长上下文与高推理努力触发条件补测
 
@@ -103,7 +109,7 @@ const report=`# 长上下文与高推理努力触发条件补测
 
 用户指出的现象是：长上下文叠加 high reasoning effort 后，推理中短句机械轮转，同时不调用可用工具。空回复、长推理、长度截断或错误答案本身均不算命中。
 
-使用本地 Pi ${batch.piVersion} 的 ModelRuntime，复用用户已确认的官方 Flash 连接。不创建 AgentSession，不读取 AGENTS.md/CLAUDE.md/SYSTEM.md，不加载技能、扩展或纠正提示。请求没有 system/developer 消息。工具仅有显式声明的三个虚拟文件接口：bench_read、bench_patch、bench_test；tool_choice 未强制指定某工具。
+使用本地 Pi ${batch.piVersion} 的 ModelRuntime，复用用户已确认的官方 Flash 连接。保存的 HTTP 请求对应公开模型名 \`${summary.model}\`；${summary.modelIdentity.localRouteRedacted ? '原始 model 字段中的路由前缀已隐去，公开名称不是原始字段全文' : '原始 model 字段即为该公开名称'}，配置显示名不作为服务端权重版本证明。不创建 AgentSession，不读取 AGENTS.md/CLAUDE.md/SYSTEM.md，不加载技能、扩展或纠正提示。请求没有 system/developer 消息。工具仅有显式声明的三个虚拟文件接口：bench_read、bench_patch、bench_test；tool_choice 未强制指定某工具。
 
 长组初始上下文为 105 条合成消息：27 user、52 assistant、26 tool，包含26次已成功的历史读取及结果；短组为17条合成消息。没有将循环短句、失败推理或“避免循环”等干预语句放入历史。历史是本地构造的已完成验证记录，不是 GitHub 原始失败会话。模型后续工具请求和反馈均为本次实际执行。
 
@@ -150,5 +156,5 @@ node scripts/summarize-pi-trigger.mjs '<输出的证据目录>'
 
 可用 PI_TRIGGER_TASKS、PI_TRIGGER_PROFILES、PI_TRIGGER_REPEATS 缩小批次；smoke 参数仅做短轨迹验证。模型的原始输出不被检测器修改，观察结果不回灌给模型。
 `;
-await writeFile(join(output,'REPORT.zh-CN.md'),report);
+await writeFile(join(output,'REPORT.zh-CN.md'),sanitizeReport(report));
 console.log(JSON.stringify({report:join(output,'REPORT.zh-CN.md'),completed:rows.length,requests:attempts.length,audit:summary.independentAuditPassed,target:summary.targetCandidates,strictNoAction:summary.strictNoAction,passed:summary.passed}));

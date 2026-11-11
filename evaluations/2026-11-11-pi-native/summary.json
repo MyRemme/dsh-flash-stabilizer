@@ -3,6 +3,16 @@
   "completedAt": "2026-11-11T04:21:50.499Z",
   "piVersion": "1.5.0",
   "model": "deepseek-flash",
+  "modelIdentity": {
+    "source": "Saved HTTP request model fields; provider connection confirmed by user",
+    "requestsAudited": 20,
+    "publicNames": [
+      "deepseek-flash"
+    ],
+    "localRouteRedacted": true,
+    "exactWireModelPublished": false,
+    "serverWeightRevisionVerified": false
+  },
   "entryPoint": "Pi ModelRuntime.streamSimple, without CLI or AgentSession",
   "planned": 20,
   "completed": 20,

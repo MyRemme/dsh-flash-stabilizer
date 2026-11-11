@@ -9,7 +9,7 @@
 - 只读扫描 `%USERPROFILE%/.dsh/sessions` 中 839 个多帧 Zstandard JSONL 文件，解析错误为 0。
 - 检查 50,899 个 `assistant/message` / `assistant/attempt` 事件；其中 14,741 个 reasoning 长度达到 1,536 字符。
 - 筛出 24 条周期重复记录，按 reasoning 文本 SHA256 去除会话分叉中的副本后为 20 个独立样本。
-- 20 个样本均为 `fixture:deepseek-v4.1-flash`，当前响应最终正文和工具调用均为 0。
+- 20 个样本均来自本地配置标注的 Flash 模型，路由标识已隐去；这是历史 DSH 日志，不是本轮官方 API 新请求，不能仅凭配置别名确认服务端模型版本。当前响应最终正文和工具调用均为 0。
 - 12 个样本记录了 `reasoningEffort: high`；其余 8 个未显式记录，不能推断为 high 或 max。
 - 16 个样本以 `max-tokens` 结束，4 个随后由用户停止。其中 1 个为只保留流、没有提交正式消息的 `assistant/attempt`。
 - reasoning 长度为 40,122 至 685,432 字符。既有英文 `Let me write / Write / OK / Emit`，也有中文“好 / 写 / 执行 / 调用”轮转。
@@ -49,7 +49,7 @@
 
 ## 已修复与交付限制
 
-- 补充 `deepseek-v4.1-flash` 默认模型标识（含 `cordis.patch.yml` 同步），并匹配完整标识或 `/`、`:` 路由末段，覆盖本机实际的 `fixture:deepseek-v4.1-flash`。
+- 补充 Flash 兼容别名（含 `cordis.patch.yml` 同步），并匹配完整标识或 `/`、`:` 路由末段；不公布本机路由前缀。这属于宿主匹配修复，不是官方模型实测。
 - 修复短中文周期字符种类限制、短周期谐波跳变、行内反引号围栏误判，以及奇数分块导致四字符片段采样偏移的问题。
 - `assist` 改为回合结束后开启独立纠正回合，避免当前步骤注入残留及 `max-tokens` 粘滞；补测围栏完整关闭规则、待执行恢复撤销及满容量同 ID 会话替换。
 - `npm run check`：112 项通过。

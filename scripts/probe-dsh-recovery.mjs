@@ -41,7 +41,7 @@ try {
       requests++;
       const correction = options.messages.some(m => m.content?.some(b => b.type === 'text' && b.text.includes('检测到当前步骤出现重复推理。')));
       responses.push({ request: requests, correction });
-      assert.equal(options.model, 'fixture:deepseek-v4.1-flash');
+      assert.equal(options.model, 'deepseek-flash');
       if (requests === 1) {
         try {
           for (const timed of stream) {
@@ -64,7 +64,7 @@ try {
   await pluginFiber;
   assert.ok(ctx.get('flashStabilizer'), `Plugin inactive: ${pluginFiber.status}; services ${!!ctx.get('agents')}/${!!ctx.get('llm')}/${!!ctx.get('tools')}`);
   assert.equal(ctx.flashStabilizer.status().mode, 'auto');
-  current = await ctx.agentLoop.create(sessions.SessionId('offline-real-stream'), { provider: 'offline', model: 'fixture:deepseek-v4.1-flash' });
+  current = await ctx.agentLoop.create(sessions.SessionId('offline-real-stream'), { provider: 'offline', model: 'deepseek-flash' });
   current.followup(llm.createUserMessage({ content: [{ type: 'text', text: 'Offline lifecycle probe.' }], source: { kind: 'user' } }));
   let timer;
   await Promise.race([current.whenIdle(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Host probe timed out')), 20000); })]).finally(() => clearTimeout(timer));

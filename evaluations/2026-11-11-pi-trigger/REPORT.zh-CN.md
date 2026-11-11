@@ -6,7 +6,7 @@
 
 用户指出的现象是：长上下文叠加 high reasoning effort 后，推理中短句机械轮转，同时不调用可用工具。空回复、长推理、长度截断或错误答案本身均不算命中。
 
-使用本地 Pi 1.5.0 的 ModelRuntime，复用用户已确认的官方 Flash 连接。不创建 AgentSession，不读取 AGENTS.md/CLAUDE.md/SYSTEM.md，不加载技能、扩展或纠正提示。请求没有 system/developer 消息。工具仅有显式声明的三个虚拟文件接口：bench_read、bench_patch、bench_test；tool_choice 未强制指定某工具。
+使用本地 Pi 1.5.0 的 ModelRuntime，复用用户已确认的官方 Flash 连接。保存的 HTTP 请求对应公开模型名 `deepseek-flash`；原始 model 字段中的路由前缀已隐去，公开名称不是原始字段全文，配置显示名不作为服务端权重版本证明。不创建 AgentSession，不读取 AGENTS.md/CLAUDE.md/SYSTEM.md，不加载技能、扩展或纠正提示。请求没有 system/developer 消息。工具仅有显式声明的三个虚拟文件接口：bench_read、bench_patch、bench_test；tool_choice 未强制指定某工具。
 
 长组初始上下文为 105 条合成消息：27 user、52 assistant、26 tool，包含26次已成功的历史读取及结果；短组为17条合成消息。没有将循环短句、失败推理或“避免循环”等干预语句放入历史。历史是本地构造的已完成验证记录，不是 GitHub 原始失败会话。模型后续工具请求和反馈均为本次实际执行。
 

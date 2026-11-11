@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { publicModelName, modelProvenance, sanitizeReport } from './report-privacy.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const input = resolve(process.argv[2] ?? '');
@@ -14,10 +15,12 @@ let manual = {};
 try { manual = JSON.parse(await readFile(join(input, 'manual-review.json'), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 const sha = text => createHash('sha256').update(text).digest('hex');
 const rows = [];
+const wireModels = [];
 for (const r of batch.results) {
   const c = cases.find(c => c.id === r.case);
   const bytes = await readFile(join(input, `${r.name}.wire-request.json`), 'utf8');
   const wire = JSON.parse(bytes);
+  wireModels.push(wire.model);
   const m = wire.messages;
   const text = typeof m?.[0]?.content === 'string' ? m[0].content
     : m?.[0]?.content?.length === 1 && m[0].content[0].type === 'text' ? m[0].content[0].text : undefined;
@@ -48,7 +51,8 @@ for (const r of batch.results) {
 }
 const count = fn => rows.filter(fn).length;
 const summary = {
-  startedAt: batch.startedAt, completedAt: batch.completedAt, piVersion: batch.piVersion, model: batch.model,
+  startedAt: batch.startedAt, completedAt: batch.completedAt, piVersion: batch.piVersion, model: publicModelName(wireModels[0]),
+  modelIdentity: modelProvenance(wireModels),
   entryPoint: batch.entryPoint, planned: batch.requestBudget, completed: rows.length,
   maxTokens: batch.maxTokens, timeoutMs: batch.timeoutMs, maxRetries: batch.maxRetries,
   auditPassed: count(r => r.isolationPassed), rawLength: count(r => r.rawFinishes.includes('length')),
@@ -90,7 +94,7 @@ if (process.argv[3]) {
     rawResponseReadErrors: raw.map(x=>x.readError).filter(Boolean),
     rawDirectory: relative(root, diagnosticInput).replaceAll('\\', '/'),
   };
-  await writeFile(join(output, 'stream-diagnostic.json'), JSON.stringify(diagnostic, null, 2));
+  await writeFile(join(output, 'stream-diagnostic.json'), JSON.stringify(sanitizeReport(diagnostic), null, 2));
 } else {
   try {
     const prior = JSON.parse(await readFile(join(output, 'stream-diagnostic.json'), 'utf8'));
@@ -101,7 +105,7 @@ if (process.argv[3]) {
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
 }
 if (diagnostic) summary.streamDiagnostic = diagnostic;
-await writeFile(join(output, 'summary.json'), JSON.stringify(summary, null, 2));
+await writeFile(join(output, 'summary.json'), JSON.stringify(sanitizeReport(summary), null, 2));
 const groups = [...new Set(rows.map(r => r.case))].map(id => {
   const rs = rows.filter(r => r.case === id), passed = rs.filter(r => r.manualReview?.passed ?? r.functionalValidation.passed).length;
   return `| ${id} | ${rs.length} | ${passed} | ${rs.filter(r=>r.rawFinishes.includes('length')).length} | ${rs.filter(r=>r.emptyFinal).length} | ${rs.filter(r=>r.repeatedByDetector).length} |`;
@@ -112,7 +116,7 @@ const report = `# Pi 原生模型测试记录（${batch.startedAt.slice(0,10)}�
 
 本轮 ${rows.length} 个样本中，${summary.rawLength} 个原始结束原因为 length，${summary.emptyFinal} 个没有最终正文；当前周期检测器确认 ${summary.detectorRepeated} 个。请求无附加提示审计全部通过。这些结果只描述本轮表现，不能据此归因采样器，也不能证明插件能改善模型输出。
 
-仅使用 Pi ${batch.piVersion} 的底层 ModelRuntime，复用用户已确认的官方 DeepSeek-V4.1-Flash 连接，模型标识为 \`${batch.model}\`。不经过 CLI 或 AgentSession。
+仅使用 Pi ${batch.piVersion} 的底层 ModelRuntime，复用用户已确认的官方 DeepSeek Flash 连接。根据保存的 HTTP 请求，公开模型名为 \`${summary.model}\`；${summary.modelIdentity.localRouteRedacted ? '原始 model 字段带有路由前缀，发布时隐去，不将脱敏后的名称冒充原始字段全文' : '实际 model 字段即为该公开名称'}。不经过 CLI 或 AgentSession。配置显示名不作为服务端权重版本证明。
 
 ## 实际请求审计
 
@@ -186,5 +190,5 @@ node scripts/summarize-pi-native.mjs '<本轮原始证据目录>'
 
 baseline 默认发送 20 次收费模型请求；smoke 仅发送 1 次。用户配置不作修改，读取现有凭据仅用于请求鉴权，不将鉴权头写入证据。
 `;
-await writeFile(join(output, 'REPORT.zh-CN.md'), report);
+await writeFile(join(output, 'REPORT.zh-CN.md'), sanitizeReport(report));
 console.log(JSON.stringify({ report: join(output, 'REPORT.zh-CN.md'), completed: rows.length, audit: summary.auditPassed, length: summary.rawLength, empty: summary.emptyFinal, detector: summary.detectorRepeated, missingUsage: summary.missingUsage }));
