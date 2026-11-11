@@ -7,8 +7,10 @@ export function periodicSuffix(text: string, minPeriod: number, maxPeriod: numbe
   let best = { period: 0, repeats: 0, coverage: 0 };
   for (let period = minPeriod; period <= Math.min(maxPeriod, Math.floor(text.length / minRepeats)); period++) {
     const end = text.length, unit = text.slice(end - period);
-    // Require a meaningful unit: single-character and punctuation runs only produce observation.
-    if (new Set(unit).size < 6) continue;
+    // Short Chinese phrases can have fewer than six distinct characters.
+    // Require two different letters (including CJK), rather than alphabet size;
+    // punctuation, numeric-only and single-character runs remain unconfirmed.
+    if (new Set(unit.match(/\p{L}/gu) ?? []).size < 2) continue;
     let repeats = 1;
     while (end - (repeats + 1) * period >= 0 && text.slice(end - (repeats + 1) * period, end - repeats * period) === unit) repeats++;
     const coverage = repeats * period / text.length;
@@ -18,7 +20,9 @@ export function periodicSuffix(text: string, minPeriod: number, maxPeriod: numbe
 }
 export function grams(text: string): Set<string> {
   const set = new Set<string>();
-  for (let i = 0; i + 4 <= text.length; i += 2) set.add(text.slice(i, i + 4));
+  // Include every offset so odd-sized stream deltas cannot make an unchanged
+  // periodic window appear wholly novel by switching the sampling parity.
+  for (let i = 0; i + 4 <= text.length; i++) set.add(text.slice(i, i + 4));
   return set;
 }
 export function codeLike(text: string): boolean {

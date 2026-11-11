@@ -4,7 +4,7 @@ DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正
 
 ## 当前可用功能
 
-- 流式检测长段确定性周期重复；按会话、模型请求和内容块隔离，连续多次观测后确认。
+- 流式检测确定性周期重复，包括“好。执行。好。”一类短句轮转；按会话、模型请求和内容块隔离，连续多次观测后确认。
 - 排除工具参数 JSON，跳过 Markdown 代码围栏，降低重复模板代码的敏感度。
 - 对五分钟内相同工具、相同参数且结果不变的重复执行告警。结果变化会重置该指纹的计数。
 - `observe` 默认只告警；`assist` 在确认重复后通过宿主 `agent.inject()` 排入下一步纠正信息，每个用户任务最多两次。
@@ -52,20 +52,20 @@ dsh plugin --profile desktop remove dsh-flash-stabilizer
 - id: flash-stabilizer
   config:
     mode: assist
-    models: [deepseek-flash, deepseek-v4-flash, deepseek-v4-flash-vision-exp]
+    models: [deepseek-flash, deepseek-v4-flash, deepseek-v4.1-flash, deepseek-v4-flash-vision-exp]
     maxRecoveries: 2
     logDir: 'D:/DSH-Logs/flash-stabilizer'
 ```
 
 该 patch 替换此行的整个 config；未写字段由插件默认值补齐。更高优先级的 home patch 或 `--patch` 仍可覆盖它。修改后按宿主支持的方式重新加载配置或重启。
 
-模型匹配使用 DSH 请求中的**模型标识**，不使用界面显示名称；自定义 provider 的别名应加进 `models`。`providers` 为空表示不限制提供方；不会观察压缩等带 `purpose` 的辅助请求。
+模型匹配使用 DSH 请求中的**模型标识**，不使用界面显示名称。可精确匹配整个标识，或匹配 `/`、`:` 分隔后的末段，例如默认覆盖 `fixture:deepseek-v4.1-flash` 和 `fixture/nested/deepseek-v4.1-flash`；其他别名应加进 `models`。`providers` 为空表示不限制提供方；不会观察压缩等带 `purpose` 的辅助请求。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|
 | `enabled` | `true` | 总开关，设为 false 后不注册监听 |
 | `mode` | `observe` | `observe` / `assist`；`auto` 在本版降级 |
-| `models` | 上例三个别名 | 精确匹配的模型标识 |
+| `models` | 上例四个别名 | 精确匹配完整标识或路由末段 |
 | `providers` | `[]` | 可选的提供方标识限制 |
 | `disabledSessions` | `[]` | 不启用监控的会话 ID |
 | `windowChars` | `4096` | 每个内容块的检测窗口，最多 16384 字符 |
@@ -114,10 +114,30 @@ npm pack --pack-destination artifacts --cache .npm-cache
 node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.0.tgz
 ```
 
-`npm run check` 包含类型检查、构建及 80 项自动化测试。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、软纠正上限和卸载。
+`npm run check` 包含类型检查、构建及 89 项自动化测试。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、软纠正上限和卸载。
 
-测试使用确定性输出，不需要 API Key。源码在 `src/`，测试在 `tests/`，审查报告在 [FEASIBILITY_REVIEW.zh-CN.md](FEASIBILITY_REVIEW.zh-CN.md)，每版本接口来源及 SHA 在 `compatibility/releases.json`。
+上述自动化和兼容性测试使用确定性输出，不需要 API Key。源码在 `src/`，测试在 `tests/`，审查报告在 [FEASIBILITY_REVIEW.zh-CN.md](FEASIBILITY_REVIEW.zh-CN.md)，每版本接口来源及 SHA 在 `compatibility/releases.json`。
+
+### 真实模型的原生基线
+
+`scripts/test-pi-native.mjs` 通过本地 Pi 的底层 `ModelRuntime`，复用已配置的 DeepSeek Flash 连接。它不创建 AgentSession；实际 HTTP 请求必须只有一条与测试题逐字相同的 user 消息，不带系统提示、项目上下文、技能、扩展、工具、历史或 `@文件` 包装。发现额外输入立即停止；本插件不介入请求。
+
+```powershell
+node scripts/test-pi-native.mjs smoke
+node scripts/test-pi-native.mjs baseline
+node scripts/summarize-pi-native.mjs '<输出的原始证据目录>'
+```
+
+smoke 发送 1 次真实请求；baseline 默认发送 20 次，high/max 各重复两次，每次输出上限 16,384 token、180 秒超时、零重试。它们会产生模型费用，不属于 `npm test`。原始请求与响应放在受 Git 忽略的 `.compat-cache/pi-native/`；报告器离线复核请求及题目哈希，输出到 `evaluations/`。校验串与上下文回答另需人工复核，详情见 [原生测试报告](evaluations/2026-11-11-pi-native/REPORT.zh-CN.md)。
+
+可用 `PI_NATIVE_CASES`、`PI_NATIVE_EFFORTS`、`PI_NATIVE_REPEATS`、`PI_NATIVE_MAX_TOKENS` 缩小批次；Windows 默认读取 `%APPDATA%/npm/node_modules/@earendil-works/pi-coding-agent` 与 `%USERPROFILE%/.pi/agent`，可通过 `PI_NATIVE_PACKAGE_DIR`、`PI_NATIVE_CONFIG_DIR` 指定。脚本不修改用户配置，不写入鉴权头。
+
+`scripts/test-pi-live.mjs` 是早期的 Agent 探索测试，含中性系统提示和文件输入包装，其结果不计入原生基线。这里的纯模型测试也不等于插件干预有效性测试。
+
+针对“长上下文＋high推理，短句轮转但不调用工具”的条件，另有 `scripts/test-pi-loop-trigger.mjs`：直接通过 ModelRuntime 发送显式合成多轮历史及三个虚拟工具，无系统提示、AgentSession 或恢复干预。它对照短/长历史与high/max/low，默认10组、每组最多6次请求、每请求32,768输出token，会发生模型费用。`scripts/summarize-pi-trigger.mjs '<原始证据目录>'` 离线独立核验全部请求和工具结果，并检查推理周期；[触发条件补测报告](evaluations/2026-11-11-pi-trigger/REPORT.zh-CN.md) 与纯模型基线分开记录。单元回放中循环可检出，不代表模型实测已复现该循环。
 
 ## 后续验收
+
+已从本机 DSH 日志找到 20 个去重的真实短句空转样本，保持原始 delta 边界回放后均触发检测；DSH 0.2.2-rc.1 隔离宿主也验证了取消原流和提交一次纠正续接。真实模型重新触发与恢复效果尚未完成，发布包仍不开放 auto。完整口径与数据边界见 [本地会话验证报告](evaluations/2026-11-11-dsh-local/REPORT.zh-CN.md)。
 
 自动取消/恢复需要补齐真实提供方断流、会话持久化与重放、用户停止优先级、宿主重试组合、恢复预算持久化。代码进展模块需要单独实现文件/Git/测试证据适配。完成这些验证和真实任务对照评估后，再发布对应能力的版本。

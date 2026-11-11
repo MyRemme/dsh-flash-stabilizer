@@ -15,6 +15,20 @@ describe('repeat evidence', () => {
     const e = periodicSuffix(unit.repeat(200).slice(-4096), 8, 512, 6);
     expect(e.coverage).toBeGreaterThan(0.85);
   });
+  it.each(['好。执行。好。', 'Write. / Output. / Let me write.'])('confirms short rotating phrases: %s', unit => {
+    for (const size of [1, 7, 73, 4096]) {
+      const events: { confirmed: boolean }[] = [];
+      const monitor = new StreamMonitor(defaults, e => events.push(e));
+      chunks(unit.repeat(1200), size).forEach(c => monitor.push(c));
+      expect(events.filter(e => e.confirmed)).toHaveLength(1);
+    }
+  });
+  it.each(['哈。', '1234567890'])('does not confirm single-letter or numeric-only spam: %s', unit => {
+    const events: { confirmed: boolean }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    chunks(unit.repeat(2000)).forEach(c => monitor.push(c));
+    expect(events.some(e => e.confirmed)).toBe(false);
+  });
   it('does not interrupt long, changing reasoning', () => {
     const events: { confirmed: boolean }[] = [];
     const monitor = new StreamMonitor(defaults, e => events.push(e));

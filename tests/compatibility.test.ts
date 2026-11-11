@@ -31,6 +31,16 @@ it('ignores auxiliary requests and other models', async () => {
   }
   expect(host.status().counts['stream-repeat'] ?? 0).toBe(0);
 });
+it.each(['deepseek-v4.1-flash', 'fixture:deepseek-v4.1-flash', 'fixture/nested/deepseek-v4.1-flash'])('observes the real Flash route %s', async model => {
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
+  await stream(host, makeAgent(), chunks(repeated), false, { model });
+  expect(host.status().counts['stream-repeat']).toBeGreaterThanOrEqual(1);
+});
+it.each(['fixture:deepseek-v4.1-flash-extra', 'fixture:some-deepseek-v4.1-flash'])('does not match a partial Flash name %s', async model => {
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
+  await stream(host, makeAgent(), chunks(repeated), false, { model });
+  expect(host.status().counts['stream-repeat'] ?? 0).toBe(0);
+});
 it('isolates sessions and discards pending state on unload', async () => {
   const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
   await Promise.all([stream(host, makeAgent('a'), chunks(repeated), false), stream(host, makeAgent('b'), chunks('normal answer'), false)]);

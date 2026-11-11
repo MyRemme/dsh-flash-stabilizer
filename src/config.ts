@@ -20,7 +20,7 @@ export interface Settings {
   language: 'zh' | 'en';
 }
 export const defaults: Settings = {
-  enabled: true, mode: 'observe', models: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'],
+  enabled: true, mode: 'observe', models: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4.1-flash', 'deepseek-v4-flash-vision-exp'],
   providers: [], disabledSessions: [], windowChars: 4096, minChars: 1536, checkEveryChars: 256,
   minPeriod: 16, maxPeriod: 512, minRepeats: 6, confirmations: 3,
   toolRepeatLimit: 4, maxRecoveries: 2, maxSessions: 128,

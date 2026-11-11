@@ -59,7 +59,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     return state;
   };
   const selected = (options: RequestOptions) => typeof options.model === 'string'
-    && config.models.includes(options.model)
+    && (config.models.includes(options.model) || config.models.includes(options.model.split(/[/:]/).at(-1)!))
     && (!config.providers.length || (typeof options.provider === 'string' && config.providers.includes(options.provider)));
 
   ctx.on('agent/pre-step', (payload: StepPayload, next: () => Promise<unknown>) => {
