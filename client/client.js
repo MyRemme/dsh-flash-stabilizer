@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
       'correction-deferred': ['等待纠正', '当前回合结束后提交纠正；本次输出未中断。'],
       'recovery-submitted': ['已提交纠正', '已开启独立纠正回合，恢复效果待确认。'],
       'budget-exhausted': ['纠正次数已用完', '已达到本任务的纠正上限，没有追加模型请求。'],
-      'user-input-takes-priority': ['已取消待执行纠正', '用户输入优先，没有追加纠正回合。'],
+      'user-input-takes-priority': ['用户输入优先', '已有待处理输入，未自动停止或追加纠正回合，由宿主继续处理输入。'],
       'intervention-unavailable': ['纠正不可用', '当前宿主或模式不支持该动作，未中断输出。'],
       'recovery-failed': ['纠正提交失败', '没有确认纠正成功，请检查当前对话。'],
       'cancel-requested': ['已请求中断', '已向宿主请求停止本次重复响应；不等于宿主已确认停止。'],
@@ -44,6 +44,7 @@ window.__ModuleLoader__.load({
       if (data.coverage === 'unavailable' && latest?.kind === 'recovery' && ['cancel-requested', 'stop-confirmed', 'stop-unconfirmed', 'stop-failed'].includes(latest.action)) return { label: labels[latest.action][0], tone: 'warn' };
       if (excluded[data.coverage]) return { label: excluded[data.coverage], tone: 'off' };
       if (latest?.kind === 'recovery') return { label: labels[latest.action]?.[0] || '处理状态已更新', tone: 'warn' };
+      if (live?.evidence?.uncertainty || latest?.uncertainty && live?.risk !== 'clear') return { label: '无法确认空转 · 已通知', tone: 'warn' };
       if (live?.risk === 'confirmed' || (!live && latest?.kind === 'stream-repeat' && latest.confirmed)) return { label: '确认重复 · 未中断', tone: 'warn' };
       if (live?.risk === 'suspected' || (!live && latest?.kind === 'stream-repeat')) return { label: '疑似重复 · 观察中', tone: 'warn' };
       if (live?.incomplete) return { label: '检测不完整 · 内容块超限', tone: 'off' };
@@ -54,9 +55,10 @@ window.__ModuleLoader__.load({
     }
     function explain(event, mode) {
       if (event.kind === 'stream-repeat') return {
-        title: event.confirmed ? `确认${event.contentType === 'text' ? '正文' : event.contentType === 'reasoning' ? '推理' : '输出'}重复` : '疑似重复',
+        title: event.uncertainty ? '重复特征待确认' : event.confirmed ? `确认${event.contentType === 'text' ? '正文' : event.contentType === 'reasoning' ? '推理' : '输出'}重复` : '疑似重复',
         reason: `检测到${event.method === 'phrase' ? '夹杂变化文字的短句反复出现' : '周期性短句轮转'}${event.period ? `，周期 ${event.period} 字符` : ''}${event.repeats ? `、重复 ${event.repeats} 次` : ''}${event.coverage === undefined ? '' : `，${event.method === 'phrase' ? '短句单元占比' : '窗口覆盖'} ${Math.round(event.coverage * 100)}%`}${event.novelty === undefined ? '' : `，新增四字符片段 ${Math.round(event.novelty * 100)}%`}。${event.confirmed ? '连续多次检查通过重复确认。' : '尚未达到连续确认条件。'}`,
-        result: event.confirmed && mode === 'guard' && event.contentType === 'reasoning' ? '已确认推理重复；停止请求和宿主确认见后续处理记录。'
+        result: event.uncertainty ? '重复短句间仍有变化编号，可能是逐项检查，无法确认是否空转。已通知你，未自动停止或提交纠正，继续监测。'
+          : event.confirmed && mode === 'guard' && event.contentType === 'reasoning' ? '已确认推理重复；停止请求和宿主确认见后续处理记录。'
           : event.confirmed && mode === 'assist' ? '仅确认重复；纠正是否排队或提交见后续处理记录。本次输出未中断。' : '仅告警，未拦截、未中断输出。',
       };
       if (event.kind === 'tool-repeat') return { title: '工具重复告警', reason: `相同工具、参数及结果${event.repeats ? `连续出现 ${event.repeats} 次` : '重复出现'}，可能没有新增进展。`, result: '仅提醒，未阻止、跳过或重放任何工具。' };
@@ -78,8 +80,8 @@ window.__ModuleLoader__.load({
         } finally { clearTimeout(timer); requests.delete(controller); }
       }
       function accept(data) {
-        const event = data.events.find(e => (e.kind === 'stream-repeat' && e.confirmed) || (e.kind === 'recovery' && e.action === 'recovery-submitted'));
-        const id = event ? `${event.session}/${event.time}/${event.kind}/${event.action || ''}` : '';
+        const event = data.events.find(e => (e.kind === 'stream-repeat' && (e.confirmed || e.uncertainty)) || (e.kind === 'recovery' && e.action === 'recovery-submitted'));
+        const id = event ? `${event.session}/${event.time}/${event.kind}/${event.contentType || ''}/${event.action || ''}` : '';
         const patch = { data, error: '', updatedAt: new Date().toISOString() };
         if (id && id !== lastNotice) { patch.toast = event; lastNotice = id; }
         publish(patch);

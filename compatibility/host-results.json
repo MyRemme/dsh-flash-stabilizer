@@ -1,5 +1,5 @@
 {
-  "testedAt": "2026-11-12T12:26:00.693Z",
+  "testedAt": "2026-11-12T13:10:57.310Z",
   "type": "real-host-core-with-mock-provider",
   "results": [
     {
@@ -23,9 +23,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -51,9 +55,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -79,9 +87,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -107,9 +119,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -135,9 +151,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -163,9 +183,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -191,9 +215,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -219,9 +247,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -247,9 +279,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -275,9 +311,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -303,9 +343,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -331,9 +375,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -359,9 +407,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -387,9 +439,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -415,9 +471,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -443,9 +503,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -471,9 +535,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -499,9 +567,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -527,9 +599,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -555,9 +631,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -583,9 +663,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -611,9 +695,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -639,9 +727,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -667,9 +759,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -695,9 +791,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -723,9 +823,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -756,9 +860,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -784,9 +892,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -812,9 +924,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -840,9 +956,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -868,9 +988,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -901,9 +1025,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -929,9 +1057,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -957,9 +1089,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -985,9 +1121,13 @@
         "guard-cancel",
         "guard-settlement",
         "guard-no-retry",
-        "guard-no-prompt"
+        "guard-no-prompt",
+        "guard-checklist",
+        "guard-body-loop",
+        "guard-queued-steering",
+        "guard-queued-followup"
       ],
-      "requests": 20,
+      "requests": 26,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true

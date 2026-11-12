@@ -231,6 +231,14 @@ it('explains intermittent phrase evidence and distinguishes requested from confi
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   expect(document.querySelector('.fs-dock-button').textContent).toContain('已停止重复生成');
 });
+it('notifies uncertain repetition without claiming a confirmed loop or interruption', async () => {
+  const event = { kind: 'stream-repeat', method: 'phrase', uncertainty: 'changing-numbered-units', action: 'notify-only', contentType: 'reasoning', confirmed: false, repeats: 90, time: '2026-11-12T12:00:00Z' };
+  const data = { ...baseline(), mode: 'guard', events: [event] };
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'conversations' ? [] : data }));
+  expect(document.querySelector('[role="alert"]').textContent).toContain('重复特征待确认');
+  expect(document.querySelector('[role="alert"]').textContent).toContain('未自动停止或提交纠正');
+  expect(document.querySelector('.fs-event-title').textContent).toBe('重复特征待确认');
+});
 it('shows the current request while keeping earlier incidents in conversation details', async () => {
   const data = { ...sessionData(), coverage: 'monitoring', confirmed: 1,
     events: [{ kind: 'stream-repeat', confirmed: true, time: '2026-11-11T11:01:00Z' }] };

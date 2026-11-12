@@ -4,6 +4,16 @@ import { RecoveryController } from '../src/recovery.js';
 import { makeAgent } from './helpers.js';
 const ending = { reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'dsh-flash-stabilizer: confirmed repetition' } } };
 describe('bounded recovery', () => {
+  it.each(['nextStep', 'nextTurn'] as const)('preserves queued %s input without cancelling it', target => {
+    const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() }, actions: string[] = [];
+    const c = new RecoveryController({ ...defaults, mode: 'guard' }, action => actions.push(action));
+    c.resetByUser(agent);
+    agent.inbox![target] = [{ source: { kind: 'user' } }];
+    c.request(agent, new AbortController().signal, true);
+    expect(actions).toEqual(['user-input-takes-priority']);
+    expect(agent.cancel).not.toHaveBeenCalled(); expect(agent.followup).not.toHaveBeenCalled();
+    expect(agent.inbox![target]).toHaveLength(1);
+  });
   it('guard requests a stop, confirms durable settlement, and never follows up', async () => {
     const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() }, actions: string[] = [];
     const c = new RecoveryController({ ...defaults, mode: 'guard' }, action => actions.push(action));

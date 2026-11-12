@@ -39,6 +39,7 @@ export class MetricsStore {
       ...(event.coverage === undefined ? {} : { coverage: event.coverage }),
       ...(event.novelty === undefined ? {} : { novelty: event.novelty }),
       ...(event.method === undefined ? {} : { method: event.method }),
+      ...(event.uncertainty === undefined ? {} : { uncertainty: event.uncertainty }),
     };
     this.recent.push(safe);
     if (event.session) this.references.set(safe.session, event.session);

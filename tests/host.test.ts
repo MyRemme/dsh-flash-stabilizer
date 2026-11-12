@@ -13,4 +13,8 @@ it('loads and unloads in the real published DSH AgentLoop and detects actual too
   expect(result.checks).toContain('assist-user-stop');
   expect(result.checks).toContain('guard-cancel');
   expect(result.checks).toContain('guard-no-retry');
+  expect(result.checks).toContain('guard-checklist');
+  expect(result.checks).toContain('guard-body-loop');
+  expect(result.checks).toContain('guard-queued-steering');
+  expect(result.checks).toContain('guard-queued-followup');
 }, 35000);

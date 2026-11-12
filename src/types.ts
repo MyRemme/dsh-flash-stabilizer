@@ -48,4 +48,5 @@ export interface Notice {
   contentType?: 'reasoning' | 'text'; turn?: number; step?: number;
   coverage?: number; novelty?: number;
   method?: 'periodic' | 'phrase';
+  uncertainty?: 'changing-numbered-units';
 }

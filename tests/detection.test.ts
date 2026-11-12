@@ -6,6 +6,30 @@ import { FenceFilter } from '../src/fences.js';
 import { chunks, repeated } from './helpers.js';
 
 describe('repeat evidence', () => {
+  it.each([1, 73, 4096])('keeps changing numbered checklists uncertain and continues monitoring (%i)', size => {
+    const events: { confirmed: boolean; uncertainty?: string; contentType: string }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    const checklist = Array.from({ length: 100 }, (_, i) => `项目 ${i}。检查。通过。保留。\n`).join('');
+    chunks(checklist, size).slice(0, -2).forEach(chunk => monitor.push(chunk));
+    expect(events.some(e => e.uncertainty === 'changing-numbered-units')).toBe(true);
+    expect(events.some(e => e.confirmed)).toBe(false);
+    expect(monitor.snapshot().risk).toBe('suspected');
+    const checks = monitor.snapshot().checks;
+    monitor.push({ type: 'reasoning-delta', index: 0, text: '继续。检查。'.repeat(1000) });
+    expect(monitor.snapshot().checks).toBeGreaterThan(checks);
+    expect(events.some(e => e.confirmed && !e.uncertainty)).toBe(true);
+  });
+  it('keeps reasoning detection after confirmed body repetition and reports both content types once', () => {
+    const events: { confirmed: boolean; contentType: string }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    monitor.push({ type: 'text-delta', index: 0, text: 'Template line, repeat as requested. '.repeat(200) });
+    const checks = monitor.snapshot().checks;
+    monitor.push({ type: 'reasoning-delta', index: 1, text: '检查。继续。'.repeat(1000) });
+    monitor.push({ type: 'reasoning-delta', index: 1, text: '检查。继续。'.repeat(1000) });
+    expect(monitor.snapshot().checks).toBeGreaterThan(checks);
+    expect(events.filter(e => e.confirmed).map(e => e.contentType)).toEqual(['text', 'reasoning']);
+    expect(monitor.snapshot().evidence?.contentType).toBe('reasoning');
+  });
   it.each([1, 7, 73, 4096])('detects intermittent short reasoning loops in a short sample (%i)', size => {
     const events: { confirmed: boolean; method?: string; chars: number }[] = [];
     const monitor = new StreamMonitor(defaults, e => events.push(e));

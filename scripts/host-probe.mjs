@@ -33,6 +33,7 @@ try {
     const native = await load('@deepseek-ai/dsh-tool-executor-native'); await ctx.plugin(native);
   }
   let response = 'normal', requests = 0, toolBodies = 0, correctionsSeen = 0, guardClosed = false, guardConsumed = 0;
+  let reviewReady, reviewResume, queuedStep = 0;
   let recoveryStep = 0, sawRecoveredToolResult = false, waitingReady;
   const turnReasons = [];
   ctx.on('session/event', (_session, event) => { if (event.type === 'turn/end') turnReasons.push(event.data.reason.kind); });
@@ -43,6 +44,28 @@ try {
       requests++;
       if (options.messages.some(m => m.role === 'user' && m.content?.some(c => c.type === 'text' && c.text.includes('检测到当前步骤出现重复推理。')))) correctionsSeen++;
       assert.equal(options.model, 'deepseek-flash');
+      if (['checklist', 'body-loop', 'queued-steering', 'queued-followup'].includes(response)) {
+        const queued = response.startsWith('queued-');
+        if (queued && ++queuedStep === 2) {
+          assert.ok(options.messages.some(message => message.content?.some(block => block.type === 'text' && block.text === 'Handle queued user input.')));
+          yield { type: 'block-end', index: 0, block: { type: 'text', text: 'Queued input handled.' } };
+          yield { type: 'finish', reason: { kind: 'stop' } }; return;
+        }
+        assert.ok(!queued || queuedStep === 1, 'bounded queued input test');
+        const blocks = response === 'checklist' ? [{ type: 'reasoning', text: Array.from({ length: 100 }, (_, i) => `项目 ${i}。检查。通过。保留。\n`).join('') }]
+          : response === 'body-loop' ? [{ type: 'text', text: 'Template line, repeat as requested. '.repeat(200) }, { type: 'reasoning', text: '检查。继续。'.repeat(1000) }]
+            : [{ type: 'reasoning', text: '检查。继续。'.repeat(1000) }];
+        for (const [index, block] of blocks.entries()) {
+          yield { type: 'block-start', index, blockType: block.type };
+          if (queued) { reviewReady(); await reviewResume.promise; }
+          for (let offset = 0; offset < block.text.length; offset += 73) {
+            options.signal.throwIfAborted();
+            yield { type: block.type === 'reasoning' ? 'reasoning-delta' : 'text-delta', index, text: block.text.slice(offset, offset + 73) };
+          }
+          yield { type: 'block-end', index, block };
+        }
+        yield { type: 'finish', reason: { kind: 'stop' } }; return;
+      }
       if (response === 'guard') {
         const text = Array.from({ length: 400 }, (_, i) => `检查。继续。\n${i % 9 === 0 ? `（备注 ${i}）再看一次。\n` : ''}`).join('');
         try {
@@ -171,6 +194,34 @@ try {
   assert.ok(ctx.flashStabilizer.status().events.some(e => e.action === 'stop-confirmed'), 'durable host stop confirmed');
   assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
   checks.push('guard-cancel', 'guard-settlement', 'guard-no-retry', 'guard-no-prompt');
+  for (const scenario of ['checklist', 'body-loop', 'queued-steering', 'queued-followup']) {
+    response = scenario; queuedStep = 0;
+    current = await ctx.agentLoop.create(sessions.SessionId(`${scenario}-${version}`), { provider: 'mock', model: 'deepseek-flash' });
+    const before = requests;
+    const ready = new Promise(resolve => { reviewReady = resolve; }); reviewResume = Promise.withResolvers();
+    const done = send();
+    if (scenario.startsWith('queued-')) {
+      await bound(ready);
+      const message = llm.createUserMessage({ content: [{ type: 'text', text: 'Handle queued user input.' }], source: { kind: 'user' } });
+      if (scenario === 'queued-steering') current.steer(message); else current.followup(message);
+      reviewResume.resolve();
+    }
+    await done; await new Promise(resolve => setImmediate(resolve));
+    const status = ctx.flashStabilizer.sessionStatus(current.id);
+    if (scenario === 'checklist') {
+      assert.ok(status.events.some(event => event.uncertainty === 'changing-numbered-units' && event.action === 'notify-only'));
+      assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);
+    } else if (scenario === 'body-loop') {
+      assert.deepEqual(status.events.filter(event => event.confirmed).map(event => event.contentType).sort(), ['reasoning', 'text']);
+      assert.ok(status.events.some(event => event.action === 'stop-confirmed'));
+    } else {
+      assert.equal(status.cancelRequested, 0);
+      assert.ok(status.events.some(event => event.action === 'user-input-takes-priority'));
+      assert.equal(requests - before, 2, 'host consumes queued input exactly once');
+      assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
+    }
+    checks.push(`guard-${scenario}`);
+  }
   await pluginFiber.dispose();
   console.log('PROBE_RESULT ' + JSON.stringify({ version, status: 'passed', checks, requests, provider: 'deterministic-mock', node: process.version, packaged: !!process.argv[4] }));
 } finally { await ctx.fiber.dispose(); }

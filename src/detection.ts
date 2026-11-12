@@ -1,6 +1,6 @@
 import type { Settings } from './config.js';
 
-export interface RepeatEvidence { method?: 'periodic' | 'phrase'; period: number; repeats: number; coverage: number; novelty: number; score: number; confirmed: boolean; chars: number }
+export interface RepeatEvidence { method?: 'periodic' | 'phrase'; uncertainty?: 'changing-numbered-units'; period: number; repeats: number; coverage: number; novelty: number; score: number; confirmed: boolean; chars: number }
 
 /** Repeated short units can alternate with changing remarks, defeating exact periods. */
 export function phraseRepetition(text: string, minRepeats: number) {
@@ -21,7 +21,9 @@ export function phraseRepetition(text: string, minRepeats: number) {
   // Require the repeated units throughout the window, not a quotation in one corner.
   const distributed = [0, 1, 2].every(third => repeated.filter(unit => unit.start >= text.length * third / 3 && unit.start < text.length * (third + 1) / 3).length >= 3);
   if (repeated.length < 24 || repeatedChars < 80 || repeatedChars / Math.max(chars, 1) < 0.35 || coverage < 0.7 || !distributed) return;
-  return { period: 0, repeats: repeated.length, coverage };
+  const numbered = units.filter(unit => /\p{N}/u.test(unit.value));
+  const changingNumberedUnits = new Set(numbered.map(unit => unit.value)).size >= 3 && numbered.length / units.length >= 0.15;
+  return { period: 0, repeats: repeated.length, coverage, changingNumberedUnits };
 }
 
 /** Exact suffix periodicity plus window overlap. Scores are heuristics, not probabilities. */
@@ -91,10 +93,12 @@ export class RepeatDetector {
     this.consecutive = stable && compatiblePeriod ? this.consecutive + 1 : stable ? 1 : 0;
     this.lastConfirmedPeriod = stable ? repeat.period : 0;
     const phrase = this.reasoning && !codeLike(this.buffer.slice(-512)) ? phraseRepetition(this.buffer.slice(-512), this.config.minRepeats) : undefined;
-    const phraseStable = !!phrase && phrase.coverage >= 0.75 && phraseNovelty <= 0.45;
+    const uncertain = phrase?.changingNumberedUnits;
+    const phraseStable = !!phrase && !uncertain && phrase.coverage >= 0.75 && phraseNovelty <= 0.45;
     this.phraseConsecutive = phraseStable ? this.phraseConsecutive + 1 : 0;
-    if (phrase && (!repeat.repeats || this.phraseConsecutive >= this.config.confirmations)) return {
-      ...phrase, method: 'phrase', novelty: phraseNovelty, score: phraseStable ? 96 : 75,
+    if (phrase && (uncertain || !repeat.repeats || this.phraseConsecutive >= this.config.confirmations)) return {
+      period: phrase.period, repeats: phrase.repeats, coverage: phrase.coverage,
+      method: 'phrase', ...(uncertain ? { uncertainty: 'changing-numbered-units' as const } : {}), novelty: phraseNovelty, score: phraseStable ? 96 : 75,
       confirmed: this.phraseConsecutive >= this.config.confirmations, chars: this.total,
     };
     if (repeat.repeats === 0) return;

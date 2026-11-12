@@ -31,6 +31,10 @@ export class RecoveryController {
   request(agent: Agent, signal: AbortSignal, verified: boolean, origin?: { turn: number; step: number }): void {
     if (this.disposed || this.disabled.has(agent.id) || signal.aborted || this.pending.has(agent)) return;
     if (this.config.mode === 'observe') return;
+    if (agent.inbox && (agent.inbox.nextStep.length || agent.inbox.nextTurn.length)) {
+      this.record('user-input-takes-priority', agent, origin);
+      return;
+    }
     if (this.config.mode === 'guard') {
       if (!verified || !agent.cancel) { this.record('intervention-unavailable', agent, origin); return; }
       this.pending.set(agent, { mode: 'guard', signal, scheduled: false, origin });

@@ -139,13 +139,14 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
         if (!monitoring || !state.enabled || states.get(state.agent.id) !== state || signal !== state.signal) return;
         const origin = { turn: state.turn, step: state.step }, noticeKeys = new Set<string>();
         const monitor = new StreamMonitor(config, evidence => {
-          const key = evidence.confirmed ? 'confirmed' : 'suspected';
+          const key = `${evidence.contentType}/${evidence.uncertainty ? 'uncertain' : evidence.confirmed ? 'confirmed' : 'suspected'}`;
           if (!noticeKeys.has(key)) {
             noticeKeys.add(key);
             report({ kind: 'stream-repeat', session: state.agent.id, score: evidence.score, confirmed: evidence.confirmed, chars: evidence.chars,
               period: evidence.period, repeats: evidence.repeats, coverage: evidence.coverage, novelty: evidence.novelty,
               ...(evidence.method ? { method: evidence.method } : {}),
-              action: effectiveMode === 'observe' ? 'observe-only' : 'awaiting-recovery-decision', contentType: evidence.contentType, ...origin });
+              ...(evidence.uncertainty ? { uncertainty: evidence.uncertainty } : {}),
+              action: evidence.uncertainty ? 'notify-only' : effectiveMode === 'observe' ? 'observe-only' : 'awaiting-recovery-decision', contentType: evidence.contentType, ...origin });
           }
           if (evidence.confirmed && signal === state.signal && state.agent === states.get(state.agent.id)?.agent && monitoring && state.enabled
             && (effectiveMode !== 'guard' || evidence.contentType === 'reasoning'))
