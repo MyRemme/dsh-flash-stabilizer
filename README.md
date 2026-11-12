@@ -304,7 +304,7 @@ node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.9.tgz
 
 ### 发布更新
 
-修改版本时同步 `cordis.patch.yml` 的 `./dist/runtime-<版本>.js` 入口；构建会检查两者一致。然后运行 `npm run check`、打包及安装包宿主矩阵，审查隐私并提交推送。最后执行 `node --use-env-proxy scripts/release-github.mjs`，使用已有 GitHub 凭据创建私有正式 Release，上传安装包与 `checksums.sha256`。脚本要求工作区干净、远端 main 与本地 HEAD 一致、仓库私有且此版本尚未发布；先创建草稿，资产上传完成才发布，不覆盖已有 Release。其他已启用自动更新的安装在下次检查时获取此版本。只推送源码提交不会触发客户端安装。
+修改版本时同步 `cordis.patch.yml` 的 `./dist/runtime-<版本>.js` 入口；构建会检查两者一致。为该版本编写 `releases/<版本>.zh-CN.md`，说明具体改动、验证结果与已知限制；发布脚本要求存在对应中文说明，并自动附加安装包 SHA-256。然后运行 `npm run check`、打包及安装包宿主矩阵，审查隐私并提交推送。最后执行 `node --use-env-proxy scripts/release-github.mjs`，使用已有 GitHub 凭据创建私有正式 Release，上传安装包与 `checksums.sha256`。脚本要求工作区干净、远端 main 与本地 HEAD 一致、仓库私有且此版本尚未发布；先创建草稿，资产上传完成才发布，不覆盖已有 Release。其他已启用自动更新的安装在下次检查时获取此版本。只推送源码提交不会触发客户端安装。
 
 ### 真实模型的原生基线
 

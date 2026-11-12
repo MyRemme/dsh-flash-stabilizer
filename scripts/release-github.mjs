@@ -5,6 +5,9 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { list } from 'tar';
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const notes = (await readFile(new URL(`../releases/${pkg.version}.zh-CN.md`, import.meta.url), 'utf8')).trim();
+assert.ok(notes.startsWith(`# DSH Flash Stabilizer ${pkg.version} - `), 'Write version-specific Chinese release notes before publishing');
+const title = notes.split('\n', 1)[0].slice(2);
 const tag = `v${pkg.version}`, archive = resolve(`artifacts/${pkg.name}-${pkg.version}.tgz`);
 const data = await readFile(archive);
 const entries = new Map();
@@ -35,8 +38,8 @@ const branch = await request(`${base}/commits/main`); assert.equal(branch.sha, h
 const exists = await fetch(`${base}/releases/tags/${tag}`, { headers, signal: AbortSignal.timeout(15000) });
 assert.equal(exists.status, 404, 'Refuse overwriting an existing release');
 const release = await request(`${base}/releases`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-  tag_name: tag, target_commitish: head, name: `${pkg.name} ${pkg.version}`, draft: true, prerelease: false,
-  body: `Plugin package for DeepSeek Harness.\n\nRepository link and automatic update controls are available in the plugin panel. Updates use formal releases, SHA-256 validation, host compatibility checks and the DSH installer. Active conversations defer installation.\n\nSHA-256: ${sha256}\n\nSee README for authentication, behavior and limitations.`,
+  tag_name: tag, target_commitish: head, name: title, draft: true, prerelease: false,
+  body: `${notes}\n\n## 安装包校验\n\nSHA-256（${pkg.name}-${pkg.version}.tgz）：\n\n\`\`\`text\n${sha256}\n\`\`\`\n`,
 }) });
 const upload = release.upload_url.replace(/\{.*$/, '');
 for (const [name, bytes, type] of [[`${pkg.name}-${pkg.version}.tgz`, data, 'application/gzip'], ['checksums.sha256', sums, 'text/plain']]) {
