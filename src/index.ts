@@ -47,7 +47,8 @@ interface SessionState {
 export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const config = resolveSettings(input);
   if (!config.enabled) return;
-  const profile = ctx.get?.('profileContext') as { installAnchor?: string } | undefined;
+  // Launcher metadata can be provided while its fiber is still activating.
+  const profile = ctx.get?.('profileContext', false) as { installAnchor?: string } | undefined;
   const detected = detectHostVersion(profile?.installAnchor);
   const compatibility = compatibilityFor(config.hostVersion || detected || '');
   // Explicit version is an observation hint, never permission to unlock recovery.

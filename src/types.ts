@@ -30,7 +30,7 @@ export interface ToolResult { isError: boolean; content?: unknown; value?: unkno
 export interface HostContext {
   on(name: string, listener: (...args: any[]) => any): () => void;
   effect(effect: () => (() => void | Promise<void>), label?: string): unknown;
-  get?(name: string): unknown;
+  get?(name: string, strict?: boolean): unknown;
   inject?(names: string[], callback: (ctx: HostContext & { connection?: ConnectionService }) => void): unknown;
   provide?(name: string, value: unknown): unknown;
   logger?: { info(...args: unknown[]): void; warn(...args: unknown[]): void };

@@ -18,8 +18,18 @@ it('identifies the actual host from its launcher anchor after pnpm relocates the
       writeFileSync(join(path, 'package.json'), JSON.stringify({ version: '0.2.1-rc.2' }));
     }
     expect(detectHostVersion(anchor)).toBe('0.2.1-rc.2');
+    const host = new FakeHost(); active.push(host);
+    const get = host.get.bind(host);
+    host.get = (name: string, strict = true) => name === 'profileContext' ? strict ? undefined : { installAnchor: anchor } : get(name);
+    apply(host, { hostVersion: '0.2.1-rc.2', mode: 'guard' });
+    expect(host.status()).toMatchObject({ mode: 'guard', compatibility: { version: '0.2.1-rc.2', guard: true } });
     writeFileSync(join(directory, 'node_modules/@deepseek-ai/dsh-tools/package.json'), '{"version":"9.0.0"}');
     expect(detectHostVersion(anchor)).toBeUndefined();
+    const conflicting = new FakeHost(); active.push(conflicting);
+    const getConflicting = conflicting.get.bind(conflicting);
+    conflicting.get = (name: string, strict = true) => name === 'profileContext' ? strict ? undefined : { installAnchor: anchor } : getConflicting(name);
+    apply(conflicting, { hostVersion: '0.2.1-rc.2', mode: 'guard' });
+    expect(conflicting.status()).toMatchObject({ mode: 'observe', compatibility: { guard: false } });
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 afterEach(async () => { for (const host of active.splice(0)) await host.close(); });

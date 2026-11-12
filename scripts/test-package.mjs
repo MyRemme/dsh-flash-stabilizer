@@ -14,6 +14,7 @@ const listing = (await exec('tar', ['-tzf', artifact], { windowsHide: true })).s
 assert.ok(listing.length > 0);
 assert.ok(listing.every(p => p.startsWith('package/') && !p.split('/').includes('..') && !p.includes('\\')), 'safe archive paths');
 for (const required of ['package/dist/index.js', 'package/client/client.js', 'package/cordis.patch.yml', 'package/README.md', 'package/compatibility/releases.json']) assert.ok(listing.includes(required), required);
+assert.ok(listing.includes(`package/dist/runtime-${manifest.version}.js`), 'release-specific runtime entry');
 assert.ok(!listing.some(p => /(?:^|\/)(?:\.npm-cache|\.compat-cache)(?:\/|$)/.test(p)), 'no development caches');
 const runtimePackages = new Set(['semver', 'tar', 'chownr', 'minipass', 'minizlib', 'yallist', '@isaacs/fs-minipass']);
 for (const entry of listing.filter(path => path.startsWith('package/node_modules/'))) {
@@ -35,7 +36,7 @@ await Promise.all(Array.from({ length: 3 }, async () => {
       const directory = join(runtime, 'node_modules/dsh-flash-stabilizer');
       await mkdir(directory, { recursive: true });
       await exec('tar', ['-xzf', artifact, '-C', directory, '--strip-components=1'], { windowsHide: true });
-      const { stdout } = await exec(process.execPath, [join(root, 'scripts/host-probe.mjs'), runtime, version, join(directory, 'dist/index.js')], { cwd: root, windowsHide: true, timeout: 45000 });
+      const { stdout } = await exec(process.execPath, [join(root, 'scripts/host-probe.mjs'), runtime, version, join(directory, `dist/runtime-${manifest.version}.js`)], { cwd: root, windowsHide: true, timeout: 45000 });
       results.push(JSON.parse(/PROBE_RESULT (.+)/.exec(stdout)[1]));
       console.log(`PASS packaged DSH ${version}`);
     } catch (error) {
