@@ -1,14 +1,35 @@
 # DSH Flash Stabilizer 0.1.9
 
+**面向 DeepSeek-V4.1-Flash 的 DeepSeek Harness（DSH）防空转插件。** 针对长上下文、高推理努力下，推理反复出现“好。执行。好。”或“Write. / Output. / Let me write.”、没有正文或工具进展的现象，提供实时检测、对话告警和可选的本轮防护停止。不是模型权重或服务端采样器补丁。
+
+默认安装模式为 `observe`（只告警）；需要自动请求停止已确认的推理循环时配置 `guard`。模型匹配依据实际请求标识，官方 API 名使用 `deepseek-flash`；`deepseek-v4.1-flash` 等为兼容别名。目标型号与匹配名称不等于每次测试都验证了服务端权重版本。
+
+仓库和 [Releases](https://github.com/MyRemme/dsh-flash-stabilizer/releases) 现已公开，可以直接查看源码、中文发布说明和下载安装包，无需申请仓库访问权限。
+
+## 实测与验证报告
+
+| 证据 | 结果 | 能说明什么 |
+|---|---|---|
+| [实际问题会话回放与修复](evaluations/2026-11-12-session-repair/REPORT.zh-CN.md) | 1,530 次助手记录；旧版确认 0 次，新检测器确认 330 次；23 次无正文、无工具的候选全部检出 | 已知历史流可被检测；23 次在实际隔离宿主中停止回放，零后续请求。不等于线上检出率或提供方停止计费 |
+| [本地历史循环证据](evaluations/2026-11-11-dsh-local/REPORT.zh-CN.md) | 20 个去重循环样本全部检出；12 个记录了 high | 目标症状确实存在于历史日志；原始会话不公开 |
+| [Pi 原生模型基线](evaluations/2026-11-11-pi-native/REPORT.zh-CN.md) | 20 次实际请求，无附加 Agent 提示；目标循环未复现 | 真实请求记录；空正文、截断和错误分别报告，不算目标循环命中 |
+| [长上下文与推理档位补测](evaluations/2026-11-11-pi-trigger/REPORT.zh-CN.md) | 10 组、47 次实际请求；合成工具历史；目标循环未复现 | 无 system/developer 或 AGENTS.md 注入的条件对照，不是原始失败请求复现 |
+| [官方 API 模型名检查](evaluations/2026-11-12-official-model/REPORT.zh-CN.md) | 实际 HTTP `model=deepseek-flash`；1 次请求返回 401 | 输入隔离审计通过，但没有有效模型输出，不能计为恢复测试通过 |
+| [0.1.9 交付验证](evaluations/2026-11-12-updater/REPORT.zh-CN.md) | 191 项测试通过；35 个宿主包通过，2 个不可用；实际面板及 `guard` 激活核验通过 | 验证检测、停止和安装生命周期；模拟提供方不能替代真实模型恢复效果 |
+
+**目前没有完成“同一原始触发输入、官方模型、无插件/有插件”的在线恢复成功对照。** 旧 Pi 请求使用用户确认的官方连接，公开报告隐去了本地路由前缀；配置显示名不能独立证明服务端权重修订。完整实验条件、异常和证据边界见 [测试报告总览](TEST_REPORT.zh-CN.md)。本项目不将历史回放、宿主模拟或 401 请求写成官方模型在线恢复成功。
+
+## 0.1.9：在线升级修复
+
 0.1.9 使用带版本号的运行入口，并将本地模块打包在一起，避免在线升级后复用旧模块；启动期间从 DSH 启动器元数据读取宿主安装锚点，仍要求宿主包版本一致，配置提示不能解锁未知版本。网页自动化测试预先阻断音频及下载资源，避免唤起下载器；不修改日常浏览器或下载器设置。
 
 ## 0.1.7：仓库入口与自动更新
 
-插件页新增可点击的 [GitHub 仓库](https://github.com/MyRemme/dsh-flash-stabilizer) 入口，以及「插件更新」区域：当前版本、最新正式版、最近检查、更新状态、自动更新开关、检查与安装按钮。仓库保持私有，浏览器访问需登录有权限的 GitHub 账号。
+插件页新增可点击的 [GitHub 仓库](https://github.com/MyRemme/dsh-flash-stabilizer) 入口，以及「插件更新」区域：当前版本、最新正式版、最近检查、更新状态、自动更新开关、检查与安装按钮。公开仓库和 Release 可直接访问。
 
 自动更新默认关闭，开启后在启动时及每 6 小时检查仓库的最新正式 Release；也可手动检查与安装。更新设置保存在当前 profile 的 `.flash-stabilizer/updates/state.json`，不随插件重载丢失。只接受递增的正式版本，跳过草稿、预发布和降级。下载包保存在同目录，方便核查和手动恢复。
 
-更新请求固定访问此仓库的 GitHub API。私有仓库鉴权优先读取 `DSH_FLASH_STABILIZER_GITHUB_TOKEN`、`GH_TOKEN`、`GITHUB_TOKEN`，否则调用本机 `git credential fill` 使用已有凭据，不弹出登录、不保存令牌，也不把令牌返回界面或诊断导出。令牌需有此私有仓库的内容读取权限。无法访问时界面会报告权限、网络或尚无正式 Release 的问题，不影响推理监控。GitHub 签名资源跳转不转发鉴权头。
+更新请求固定访问此仓库的 GitHub API。公开发布支持未鉴权读取，不要求配置 Token。当前 0.1.9 实现仍会先尝试读取 `DSH_FLASH_STABILIZER_GITHUB_TOKEN`、`GH_TOKEN`、`GITHUB_TOKEN`，否则调用本机 `git credential fill` 使用已有凭据；没有凭据时发送未鉴权请求。不弹出登录、不保存令牌，也不把令牌返回界面或诊断导出。GitHub API 的匿名速率限制仍适用，失效的已有凭据也可能导致检查报错。访问失败不影响推理监控；GitHub 签名资源跳转不转发鉴权头。
 
 安装前校验 GitHub 资产摘要或 `checksums.sha256`、包名与版本、压缩包路径和条目类型、安装脚本及 DSH/Node.js 兼容范围。仅在宿主列出的所有 Agent 都空闲、无待处理输入、无监控请求时交给 DSH `pluginManager.installBundle()`；下载结束后再次检查空闲。更新期间新发起的请求仍由宿主管理，不锁定聊天。安装后需重启时明确显示「已安装，需重启 DSH 生效」，不会自行重启、结束对话或关闭其他进程。未知/缺少更新接口的宿主停用更新控件，监控仍独立工作。
 
@@ -57,7 +78,7 @@ flowchart TD
 
 同时修复内容块槽位未释放导致后续监控遗漏、重叠请求事件轮次错误、撤销后纠正状态过期、历史会话计数归零。历史计数明确标注为最近保留事件的计数，不能当作完整累计。
 
-DeepSeek Harness 原生 Cordis 插件，监控 Flash 模型的重复推理、正文和重复工具结果，提供可选的有限软纠正。包内含构建产物，安装时不需要编译。
+DeepSeek Harness 原生 Cordis 插件，主要针对 DeepSeek-V4.1-Flash，监控匹配请求的重复推理、正文和重复工具结果，提供可选的防护停止与有限软纠正。包内含构建产物，安装时不需要编译。
 
 ## 如何缓解 LLM 采样退化与推理空转
 
@@ -217,7 +238,7 @@ dsh --profile desktop --dump-config
 dsh plugin --profile desktop remove dsh-flash-stabilizer
 ```
 
-安装包保存在本地及私有 GitHub Release，源码保存在同一私有仓库，未发布到 npm。安装方式依据 [官方插件打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/docs/user/develop/basic/publish.zh.md)。
+安装包通过公开 [GitHub Releases](https://github.com/MyRemme/dsh-flash-stabilizer/releases) 提供，源码位于同一公开仓库，未发布到 npm。安装方式依据 [官方插件打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/docs/user/develop/basic/publish.zh.md)。
 
 ## 配置
 
@@ -274,7 +295,7 @@ ctx.flashStabilizer.setSessionEnabled(sessionId, true)
 
 ## 隐私与仓库内容
 
-源码仓库保持私有。跟踪内容包括插件代码、合成测试与去标识评估汇总；原始 DSH 会话、请求/响应、凭据与本机安装回执保留在受忽略目录。汇总仍包含测试时间、公开模型名、用量和哈希，并非完全匿名。已按用户授权重写此前 8 个提交，清理 12 个历史文件中的本机路径与本地模型/提供方路由；主分支历史中的相关名称均为脱敏表示，不是原始请求字段全文。GitHub 缓存及其他克隆不在本次清理范围；审查范围、发现及处理见 [隐私审查报告](PRIVACY_REVIEW.zh-CN.md)。
+源码、提交历史和 Release 安装包现已公开。跟踪内容包括插件代码、合成测试与去标识评估汇总；原始 DSH 会话、请求/响应、凭据与本机安装回执保留在受忽略目录，不属于公开交付物。汇总仍包含测试时间、公开模型名、用量和哈希；GitHub 账号及 noreply 提交身份也是公开信息，并非完全匿名。此前已按用户授权清理历史文件中的本机路径和私人模型路由；脱敏表示不能当作原始请求字段全文。GitHub 缓存及其他克隆不在可核验的清理范围；审查范围、发现及处理见 [隐私审查报告](PRIVACY_REVIEW.zh-CN.md)。
 
 ## 日志与误告警
 
@@ -304,7 +325,7 @@ node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.9.tgz
 
 ### 发布更新
 
-修改版本时同步 `cordis.patch.yml` 的 `./dist/runtime-<版本>.js` 入口；构建会检查两者一致。为该版本编写 `releases/<版本>.zh-CN.md`，说明具体改动、验证结果与已知限制；发布脚本要求存在对应中文说明，并自动附加安装包 SHA-256。然后运行 `npm run check`、打包及安装包宿主矩阵，审查隐私并提交推送。最后执行 `node --use-env-proxy scripts/release-github.mjs`，使用已有 GitHub 凭据创建私有正式 Release，上传安装包与 `checksums.sha256`。脚本要求工作区干净、远端 main 与本地 HEAD 一致、仓库私有且此版本尚未发布；先创建草稿，资产上传完成才发布，不覆盖已有 Release。其他已启用自动更新的安装在下次检查时获取此版本。只推送源码提交不会触发客户端安装。
+修改版本时同步 `cordis.patch.yml` 的 `./dist/runtime-<版本>.js` 入口；构建会检查两者一致。为该版本编写 `releases/<版本>.zh-CN.md`，说明具体改动、验证结果与已知限制；发布脚本要求存在对应中文说明，并自动附加安装包 SHA-256。然后运行 `npm run check`、打包及安装包宿主矩阵，审查隐私并提交推送。最后执行 `node --use-env-proxy scripts/release-github.mjs`，使用有发布权限的 GitHub 凭据创建正式 Release，上传安装包与 `checksums.sha256`。发布资产将公开可下载，须事先检查归档内容。脚本要求工作区干净、远端 main 与本地 HEAD 一致且此版本尚未发布，保持仓库当前可见性；先创建草稿，资产上传完成才发布，不覆盖已有 Release。其他已启用自动更新的安装在下次检查时获取此版本。只推送源码提交不会触发客户端安装。
 
 ### 真实模型的原生基线
 

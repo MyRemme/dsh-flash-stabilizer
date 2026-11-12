@@ -31,7 +31,7 @@ async function request(url, options = {}) {
   assert.ok(result.ok, `GitHub request failed: HTTP ${result.status}`);
   return result.json();
 }
-const repository = await request(base); assert.equal(repository.private, true, 'Keep the repository private');
+const repository = await request(base); // Preserve the repository's current visibility.
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim();
 assert.equal(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8', windowsHide: true }).trim(), '', 'Commit all reviewed changes before release');
 const branch = await request(`${base}/commits/main`); assert.equal(branch.sha, head, 'Push the reviewed commit first');
@@ -46,4 +46,4 @@ for (const [name, bytes, type] of [[`${pkg.name}-${pkg.version}.tgz`, data, 'app
   await request(`${upload}?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': type }, body: bytes });
 }
 const published = await request(`${base}/releases/${release.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft: false }) });
-console.log(JSON.stringify({ published: true, private: true, version: pkg.version, url: published.html_url, sha256 }));
+console.log(JSON.stringify({ published: true, private: repository.private, version: pkg.version, url: published.html_url, sha256 }));
