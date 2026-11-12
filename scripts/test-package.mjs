@@ -46,6 +46,6 @@ await Promise.all(Array.from({ length: 3 }, async () => {
   }
 }));
 results.sort((a, b) => matrix.releases.findIndex(r => r.version === a.version) - matrix.releases.findIndex(r => r.version === b.version));
-await writeFile(join(root, 'compatibility/host-results.json'), JSON.stringify({ testedAt: new Date().toISOString(), type: 'real-host-core-with-mock-provider', results }, null, 2) + '\n');
+await writeFile(resolve(process.argv[3] ?? join(root, 'compatibility/host-results.json')), JSON.stringify({ testedAt: new Date().toISOString(), type: 'real-host-core-with-mock-provider', results }, null, 2) + '\n');
 console.log(`Packaged host matrix: ${results.filter(r => r.status === 'passed').length} passed, ${results.filter(r => r.status === 'unavailable').length} unavailable, ${results.filter(r => r.status === 'failed').length} failed`);
 if (results.some(r => r.status === 'failed')) process.exitCode = 1;

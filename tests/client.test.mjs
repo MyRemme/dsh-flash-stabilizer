@@ -127,9 +127,17 @@ it.each([
   [{ risk: 'clear', active: true, reasoningChars: 4000, textChars: 0, checks: 3, silentForMs: 31000 }, '等待输出 · 尚不能判断'],
   [{ risk: 'collecting', active: false, reasoningChars: 15, textChars: 0, checks: 0, silentForMs: 0 }, '请求结束 · 检测样本不足'],
   [{ risk: 'incomplete', incomplete: true, active: true, reasoningChars: 0, textChars: 0, checks: 0, silentForMs: 0 }, '检测不完整 · 内容块超限'],
+  [{ risk: 'confirmed', incomplete: true, incompleteReason: 'monitor-error', active: true, reasoningChars: 4000, textChars: 0, checks: 3, silentForMs: 0 }, '检测异常 · 仅传递输出'],
 ])('labels incomplete observations honestly: %s', async (live, label) => {
   await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? { ...sessionData(), coverage: live.active ? 'monitoring' : 'checked', live } : baseline() }), 'a');
   expect(document.querySelector('.fs-dock-button').textContent).toContain(label);
+});
+it('notifies monitoring failures with scoped details instead of showing a healthy request', async () => {
+  const event = { kind: 'internal-error', action: 'type-error', session: 'hashed', turn: 4, step: 2, time: '2026-11-13T00:00:00Z' };
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'conversations' ? [] : { ...baseline(), events: [event] } }));
+  expect(document.querySelector('[role="alert"]').textContent).toContain('监控异常');
+  expect(document.querySelector('[role="alert"]').textContent).toContain('当前检测可能不完整');
+  expect(document.querySelector('.fs-event').textContent).toContain('第 4 轮 · 步骤 2');
 });
 it('shows and opens real incident alerts and exports only the host diagnostic payload', async () => {
   const data = baseline();

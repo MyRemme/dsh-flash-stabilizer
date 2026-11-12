@@ -22,7 +22,7 @@ assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.version), 'Only formal versions can be rele
 const sha256 = createHash('sha256').update(data).digest('hex');
 const sums = Buffer.from(`${sha256}  ${pkg.name}-${pkg.version}.tgz\n`);
 await writeFile(resolve('artifacts/checksums.sha256'), sums);
-const { githubCredential } = await import('../dist/updater.js');
+const { githubCredential } = await import('./github-credential.mjs');
 const token = await githubCredential(); assert.ok(token, 'GitHub credential unavailable');
 const base = 'https://api.github.com/repos/MyRemme/dsh-flash-stabilizer';
 const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': pkg.name, 'X-GitHub-Api-Version': '2022-11-28' };

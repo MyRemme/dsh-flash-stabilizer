@@ -21,6 +21,7 @@ export class StreamMonitor {
   private checks = 0;
   private closed = new Set<number>();
   private incomplete = false;
+  private monitorError = false;
   private lastOutputAt: string | null = null;
   private lastCheckAt: string | null = null;
   private evidence: (RepeatEvidence & { contentType: 'reasoning' | 'text' }) | null = null;
@@ -28,9 +29,11 @@ export class StreamMonitor {
     return { reasoningChars: this.reasoningChars, textChars: this.textChars, analyzedChars: this.analyzedChars, checks: this.checks,
       lastOutputAt: this.lastOutputAt, lastCheckAt: this.lastCheckAt,
       incomplete: this.incomplete,
+      incompleteReason: this.monitorError ? 'monitor-error' as const : this.incomplete ? 'capacity' as const : null,
       risk: this.reported.size ? 'confirmed' as const : this.evidence && this.evidence.score >= 70 ? 'suspected' as const : this.incomplete ? 'incomplete' as const : this.checks ? 'clear' as const : 'collecting' as const,
       evidence: this.evidence ? { ...this.evidence } : null };
   }
+  invalidate(): void { this.incomplete = true; this.monitorError = true; }
   constructor(private readonly config: Settings, private readonly report: (e: RepeatEvidence & { contentType: 'reasoning' | 'text' }) => void) {}
   push(chunk: Chunk): void {
     if (Number.isSafeInteger(chunk.index) && this.closed.has(chunk.index!)) return;
@@ -41,6 +44,7 @@ export class StreamMonitor {
       this.outputBlocks.delete(chunk.index!);
     }
     if (chunk.type === 'finish') { this.blocks.clear(); return; }
+    if (this.monitorError) return;
     if (!['block-start', 'reasoning-delta', 'text-delta', 'block-end'].includes(chunk.type) || !Number.isSafeInteger(chunk.index)) return;
     const index = chunk.index!;
     let block = this.blocks.get(index);

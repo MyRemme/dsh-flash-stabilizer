@@ -39,15 +39,16 @@ window.__ModuleLoader__.load({
     const modeName = mode => mode === 'guard' ? '防护停止' : mode === 'assist' ? '有限纠正' : '仅观察';
     function health(data) {
       if (data.tracked === false) return { label: '仅保留历史记录', tone: 'off' };
-      const excluded = { paused: '监控已暂停', disabled: '此对话未启用', 'other-model': '当前模型不在监控范围', auxiliary: '辅助请求未监控', unavailable: '检测不完整 · 待下次请求', waiting: '待下次 Flash 请求' };
+      const excluded = { paused: '监控已暂停', disabled: '此对话未启用', 'other-model': '当前模型不在监控范围', auxiliary: '辅助请求未监控', unavailable: data.live?.incompleteReason === 'monitor-error' ? '检测异常 · 仅传递输出' : '检测不完整 · 待下次请求', waiting: '待下次 Flash 请求' };
       const live = data.live, latest = data.latestEvent;
       if (data.coverage === 'unavailable' && latest?.kind === 'recovery' && ['cancel-requested', 'stop-confirmed', 'stop-unconfirmed', 'stop-failed'].includes(latest.action)) return { label: labels[latest.action][0], tone: 'warn' };
       if (excluded[data.coverage]) return { label: excluded[data.coverage], tone: 'off' };
       if (latest?.kind === 'recovery') return { label: labels[latest.action]?.[0] || '处理状态已更新', tone: 'warn' };
+      if (live?.incompleteReason === 'monitor-error' || latest?.kind === 'internal-error') return { label: '检测异常 · 仅传递输出', tone: 'off' };
       if (live?.evidence?.uncertainty || latest?.uncertainty && live?.risk !== 'clear') return { label: '无法确认空转 · 已通知', tone: 'warn' };
       if (live?.risk === 'confirmed' || (!live && latest?.kind === 'stream-repeat' && latest.confirmed)) return { label: '确认重复 · 未中断', tone: 'warn' };
       if (live?.risk === 'suspected' || (!live && latest?.kind === 'stream-repeat')) return { label: '疑似重复 · 观察中', tone: 'warn' };
-      if (live?.incomplete) return { label: '检测不完整 · 内容块超限', tone: 'off' };
+      if (live?.incomplete) return { label: live.incompleteReason === 'monitor-error' ? '检测异常 · 仅传递输出' : '检测不完整 · 内容块超限', tone: 'off' };
       if (live?.active && live.silentForMs >= 30000) return { label: '等待输出 · 尚不能判断', tone: 'warn' };
       if (latest?.kind === 'tool-repeat') return { label: '工具重复 · 仅提醒', tone: 'warn' };
       if (data.coverage === 'monitoring') return { label: !live ? '正在监控' : live.checks ? '持续检测 · 暂未发现循环' : live.reasoningChars + live.textChars ? '接收输出 · 积累检测样本' : '等待模型首个输出', tone: 'on' };
@@ -80,7 +81,7 @@ window.__ModuleLoader__.load({
         } finally { clearTimeout(timer); requests.delete(controller); }
       }
       function accept(data) {
-        const event = data.events.find(e => (e.kind === 'stream-repeat' && (e.confirmed || e.uncertainty)) || (e.kind === 'recovery' && e.action === 'recovery-submitted'));
+        const event = data.events.find(e => e.kind === 'internal-error' || (e.kind === 'stream-repeat' && (e.confirmed || e.uncertainty)) || (e.kind === 'recovery' && e.action === 'recovery-submitted'));
         const id = event ? `${event.session}/${event.time}/${event.kind}/${event.contentType || ''}/${event.action || ''}` : '';
         const patch = { data, error: '', updatedAt: new Date().toISOString() };
         if (id && id !== lastNotice) { patch.toast = event; lastNotice = id; }
@@ -217,7 +218,7 @@ window.__ModuleLoader__.load({
       function Updates({ state }) {
         const value = state.updates;
         const phases = { unavailable: '此宿主不支持在线更新', idle: '尚未检查', checking: '正在检查', current: '已是最新正式版', available: '有新版本', 'waiting-idle': '等待所有对话空闲后安装', downloading: '正在下载并校验', installing: '正在交给 DSH 安装', 'restart-required': '已安装，需重启 DSH 生效', error: '更新未完成' };
-        const errors = { 'github-auth-or-release': '无法访问仓库或尚无正式 Release，请检查本机 GitHub 登录和仓库权限。', 'github-denied': 'GitHub 拒绝访问或请求额度已用完，请稍后重试。', 'missing-artifact': 'Release 缺少安装包或校验值。', 'checksum-failed': '安装包 SHA-256 校验失败，未安装。', 'incompatible-host': '新版本不支持当前 DSH 或 Node.js，未安装。', 'host-install-failed': 'DSH 未确认安装成功，请检查原生插件页。', 'storage-failed': '无法保存更新设置，自动更新未开启。', 'install-scripts': '安装包声明安装脚本，已拒绝自动安装。' };
+        const errors = { 'github-auth-or-release': '公开 Release 暂不可访问或尚未发布，请稍后重试。', 'github-denied': 'GitHub 拒绝访问或匿名请求额度已用完，请稍后重试。', 'missing-artifact': 'Release 缺少安装包或校验值。', 'checksum-failed': '安装包 SHA-256 校验失败，未安装。', 'incompatible-host': '新版本不支持当前 DSH 或 Node.js，未安装。', 'host-install-failed': 'DSH 未确认安装成功，请检查原生插件页。', 'storage-failed': '无法保存更新设置，自动更新未开启。', 'install-scripts': '安装包声明安装脚本，已拒绝自动安装。' };
         const busy = state.updateBusy || ['checking', 'downloading', 'installing', 'restart-required'].includes(value?.phase);
         return h('section', { className: 'fs-section', 'aria-label': '插件更新' },
           h('div', { className: 'fs-section-head' }, h('h3', null, '插件更新'),

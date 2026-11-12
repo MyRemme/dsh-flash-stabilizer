@@ -28,7 +28,7 @@ async function setup(options: { busy?: boolean; checksum?: boolean; fail?: boole
     ? new Response(JSON.stringify(data.release)) : new Response(new Uint8Array(data.buffer)));
   const installBundle = vi.fn(async (_spec: string) => ({ application: options.fail ? 'failed' : 'restart-required', version: '0.1.8' }));
   const updater = new Updater({ directory: data.directory, hostVersion: '0.2.1-rc.2', manager: { installBundle }, idle: () => idle,
-    fetch: transport, credential: async () => 'fixture-token', schedule: false, currentVersion: '0.1.7' });
+    fetch: transport, schedule: false, currentVersion: '0.1.7' });
   updaters.push(updater); await updater.start();
   return { ...data, updater, transport, installBundle, idle: (value: boolean) => { idle = value; } };
 }
@@ -78,11 +78,17 @@ it('checks idle again after the download before changing the installation', asyn
   transport.mockImplementationOnce(async () => { idle(false); return new Response(new Uint8Array(buffer)); });
   updater.install(); await settled(updater); expect(updater.status().phase).toBe('waiting-idle'); expect(installBundle).not.toHaveBeenCalled();
 });
-it('uses signed asset redirects without forwarding the GitHub credential', async () => {
-  const { updater, transport, buffer } = await setup(); await updater.check();
-  transport.mockImplementationOnce(async () => new Response(null, { status: 302, headers: { location: 'https://release-assets.githubusercontent.com/fixture' } }));
-  transport.mockImplementationOnce(async (_url, options) => { expect(options?.headers).toBeUndefined(); return new Response(new Uint8Array(buffer)); });
-  updater.install(); await settled(updater); expect(updater.status().phase).toBe('restart-required');
+it('uses anonymous requests even when GitHub tokens are configured, including signed asset redirects', async () => {
+  vi.stubEnv('DSH_FLASH_STABILIZER_GITHUB_TOKEN', 'fixture-token');
+  vi.stubEnv('GH_TOKEN', 'fixture-token');
+  vi.stubEnv('GITHUB_TOKEN', 'fixture-token');
+  try {
+    const { updater, transport, buffer } = await setup(); await updater.check();
+    transport.mockImplementationOnce(async () => new Response(null, { status: 302, headers: { location: 'https://release-assets.githubusercontent.com/fixture' } }));
+    transport.mockImplementationOnce(async (_url, options) => { expect(options?.headers).toBeUndefined(); return new Response(new Uint8Array(buffer)); });
+    updater.install(); await settled(updater); expect(updater.status().phase).toBe('restart-required');
+    for (const [, options] of transport.mock.calls) expect(new Headers(options?.headers).has('Authorization')).toBe(false);
+  } finally { vi.unstubAllEnvs(); }
 });
 it('rejects redirects outside GitHub and does not expose upstream errors', async () => {
   const { updater, transport, installBundle } = await setup(); await updater.check();
@@ -110,7 +116,7 @@ it('clears a queued candidate when a fresh check fails', async () => {
 it('schedules checks every six hours only when automatic updates are enabled', async () => {
   const { directory, transport, installBundle } = await setup({ busy: true });
   const updater = new Updater({ directory, hostVersion: '0.2.1-rc.2', currentVersion: '0.1.7', fetch: transport,
-    credential: async () => undefined, manager: { installBundle }, idle: () => false });
+    manager: { installBundle }, idle: () => false });
   updaters.push(updater); vi.useFakeTimers(); await updater.start();
   await vi.advanceTimersByTimeAsync(30000); expect(transport).not.toHaveBeenCalled();
   await updater.setAutomatic(true); await updater.check(); const count = transport.mock.calls.length;

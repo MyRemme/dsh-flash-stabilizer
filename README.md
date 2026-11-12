@@ -1,10 +1,12 @@
-# DSH Flash Stabilizer 0.1.9
+# DSH Flash Stabilizer 0.1.10
 
 **面向 DeepSeek-V4.1-Flash 的 DeepSeek Harness（DSH）防空转插件。** 针对长上下文、高推理努力下，推理反复出现“好。执行。好。”或“Write. / Output. / Let me write.”、没有正文或工具进展的现象，提供实时检测、对话告警和可选的本轮防护停止。不是模型权重或服务端采样器补丁。
 
 默认安装模式为 `observe`（只告警）；需要自动请求停止已确认的推理循环时配置 `guard`。模型匹配依据实际请求标识，官方 API 名使用 `deepseek-flash`；`deepseek-v4.1-flash` 等为兼容别名。目标型号与匹配名称不等于每次测试都验证了服务端权重版本。
 
 仓库和 [Releases](https://github.com/MyRemme/dsh-flash-stabilizer/releases) 现已公开，可以直接查看源码、中文发布说明和下载安装包，无需申请仓库访问权限。
+
+**0.1.10 修复：** 补齐持续“好。”等单字推理短句漏检，监控异常会在对应对话提示，不再只记全局计数。公开仓库更新已改为完全匿名请求，保留自动更新和安装校验。[中文发布说明](releases/0.1.10.zh-CN.md)与[修复验证](evaluations/2026-11-13-detector-fix/REPORT.zh-CN.md)区分了合成盲点和原始样本：评审提及的“好。”17,233 次混合短句记录，旧版已经能够检出。
 
 ## 实测与验证报告
 
@@ -29,7 +31,7 @@
 
 自动更新默认关闭，开启后在启动时及每 6 小时检查仓库的最新正式 Release；也可手动检查与安装。更新设置保存在当前 profile 的 `.flash-stabilizer/updates/state.json`，不随插件重载丢失。只接受递增的正式版本，跳过草稿、预发布和降级。下载包保存在同目录，方便核查和手动恢复。
 
-更新请求固定访问此仓库的 GitHub API。公开发布支持未鉴权读取，不要求配置 Token。当前 0.1.9 实现仍会先尝试读取 `DSH_FLASH_STABILIZER_GITHUB_TOKEN`、`GH_TOKEN`、`GITHUB_TOKEN`，否则调用本机 `git credential fill` 使用已有凭据；没有凭据时发送未鉴权请求。不弹出登录、不保存令牌，也不把令牌返回界面或诊断导出。GitHub API 的匿名速率限制仍适用，失效的已有凭据也可能导致检查报错。访问失败不影响推理监控；GitHub 签名资源跳转不转发鉴权头。
+更新请求固定访问此仓库的 GitHub API。自 0.1.10 起，检查和下载均匿名，不读取环境 Token 或系统 Git 凭据，不弹出登录。GitHub API 的匿名速率限制仍适用；访问失败不影响推理监控，面板会提示重试。开发发布脚本单独读取发布凭据，与安装后的更新模块分离。
 
 安装前校验 GitHub 资产摘要或 `checksums.sha256`、包名与版本、压缩包路径和条目类型、安装脚本及 DSH/Node.js 兼容范围。仅在宿主列出的所有 Agent 都空闲、无待处理输入、无监控请求时交给 DSH `pluginManager.installBundle()`；下载结束后再次检查空闲。更新期间新发起的请求仍由宿主管理，不锁定聊天。安装后需重启时明确显示「已安装，需重启 DSH 生效」，不会自行重启、结束对话或关闭其他进程。未知/缺少更新接口的宿主停用更新控件，监控仍独立工作。
 
@@ -228,7 +230,7 @@ flowchart TD
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.9.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.10.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -314,7 +316,7 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.9.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.10.tgz
 ```
 
 `npm run check` 包含类型检查、构建及自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。

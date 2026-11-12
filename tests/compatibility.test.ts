@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { defaults } from '../src/config.js';
 import { apply, type StabilizerAPI } from '../src/index.js';
@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FakeHost, chunks, makeAgent, repeated, stream } from './helpers.js';
 import type { Chunk, RequestOptions, StepPayload } from '../src/types.js';
+import { StreamMonitor } from '../src/monitor.js';
 const active: FakeHost[] = [];
 it('identifies the actual host from its launcher anchor after pnpm relocates the plugin', () => {
   const directory = mkdtempSync(join(tmpdir(), 'flash-host-metadata-'));
@@ -33,6 +34,21 @@ it('identifies the actual host from its launcher anchor after pnpm relocates the
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 afterEach(async () => { for (const host of active.splice(0)) await host.close(); });
+it.each(['0.1.0-rc.7', '0.2.2-rc.1'])('marks monitor failures incomplete and forwards output on %s without logging error contents', async hostVersion => {
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion });
+  const error = new TypeError('private route and user content'); error.name = 'private-error-name';
+  const push = vi.spyOn(StreamMonitor.prototype, 'push').mockImplementationOnce(() => { throw error; });
+  try {
+    const input = chunks('ordinary answer');
+    expect(await stream(host, makeAgent(), input, compatibilityFor(hostVersion).adapter === 'live-frames')).toEqual(input);
+    const api = host.values.get('flashStabilizer') as StabilizerAPI;
+    expect(api.sessionStatus('test')).toMatchObject({ coverage: 'unavailable', live: { incomplete: true, incompleteReason: 'monitor-error', risk: 'incomplete' } });
+    expect(host.status().events[0]).toMatchObject({ kind: 'internal-error', action: 'type-error', turn: 1, step: 1 });
+    expect(JSON.stringify([host.status(), host.warnings])).not.toMatch(/private route|private-error-name/);
+    await stream(host, makeAgent(), chunks('normal next request'), compatibilityFor(hostVersion).adapter === 'live-frames');
+    expect(api.sessionStatus('test').live?.incomplete).toBe(false);
+  } finally { push.mockRestore(); }
+});
 describe.each(releases)('DSH $version contract replay', release => {
   it('selects a verified protocol path and preserves every chunk', async () => {
     for (const name of ['stream', 'reasoningDelta', 'textDelta', 'blockEnd', 'toolResult', 'cancel', 'followup', 'preStep']) expect(release.features[name]).toBe(true);

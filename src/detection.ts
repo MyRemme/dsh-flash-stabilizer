@@ -13,7 +13,9 @@ export function phraseRepetition(text: string, minRepeats: number) {
   }
   const common = [...counts].filter(([, count]) => count >= minRepeats).sort((a, b) => b[1] * b[0].length - a[1] * a[0].length).slice(0, 4);
   const values = new Set(common.map(([value]) => value));
-  if (new Set(common.map(([value]) => value).join('').match(/\p{L}/gu)).size < 2) return;
+  const letters = new Set(common.map(([value]) => value).join('').match(/\p{L}/gu));
+  const singleLetter = letters.size === 1 && common.every(([value]) => /^\p{L}$/u.test(value));
+  if (!letters.size || letters.size < 2 && !singleLetter) return;
   const repeated = units.filter(unit => values.has(unit.value));
   const chars = units.reduce((sum, unit) => sum + unit.value.replace(/\s/gu, '').length, 0);
   const repeatedChars = repeated.reduce((sum, unit) => sum + unit.value.replace(/\s/gu, '').length, 0);
@@ -23,7 +25,7 @@ export function phraseRepetition(text: string, minRepeats: number) {
   if (repeated.length < 24 || repeatedChars < 80 || repeatedChars / Math.max(chars, 1) < 0.35 || coverage < 0.7 || !distributed) return;
   const numbered = units.filter(unit => /\p{N}/u.test(unit.value));
   const changingNumberedUnits = new Set(numbered.map(unit => unit.value)).size >= 3 && numbered.length / units.length >= 0.15;
-  return { period: 0, repeats: repeated.length, coverage, changingNumberedUnits };
+  return { period: 0, repeats: repeated.length, coverage, changingNumberedUnits, singleLetter };
 }
 
 /** Exact suffix periodicity plus window overlap. Scores are heuristics, not probabilities. */
@@ -94,7 +96,9 @@ export class RepeatDetector {
     this.lastConfirmedPeriod = stable ? repeat.period : 0;
     const phrase = this.reasoning && !codeLike(this.buffer.slice(-512)) ? phraseRepetition(this.buffer.slice(-512), this.config.minRepeats) : undefined;
     const uncertain = phrase?.changingNumberedUnits;
-    const phraseStable = !!phrase && !uncertain && phrase.coverage >= 0.75 && phraseNovelty <= 0.45;
+    // Single-letter sentences need near-total coverage and stricter novelty;
+    // the general periodic detector still excludes single-letter/data spam.
+    const phraseStable = !!phrase && !uncertain && phrase.coverage >= (phrase.singleLetter ? 0.9 : 0.75) && phraseNovelty <= (phrase.singleLetter ? 0.15 : 0.45);
     this.phraseConsecutive = phraseStable ? this.phraseConsecutive + 1 : 0;
     if (phrase && (uncertain || !repeat.repeats || this.phraseConsecutive >= this.config.confirmations)) return {
       period: phrase.period, repeats: phrase.repeats, coverage: phrase.coverage,

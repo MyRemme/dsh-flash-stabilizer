@@ -83,10 +83,16 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     report({ kind: 'recovery', session: agent.id, score: 0, confirmed: false, chars: 0, action,
       ...(origin ?? (state ? { turn: state.turn, step: state.step } : {})) });
   });
-  const guarded = (operation: () => void) => {
+  const guarded = (operation: () => void, state?: SessionState) => {
     if (disposed) return;
     try { operation(); }
-    catch { metrics.record({ kind: 'internal-error', session: '', score: 0, confirmed: false, chars: 0 }); }
+    catch (error) {
+      if (state) { state.coverage = 'unavailable'; state.activity?.monitor.invalidate(); }
+      const action = error instanceof TypeError ? 'type-error' : error instanceof RangeError ? 'range-error' : 'unexpected-error';
+      report({ kind: 'internal-error', session: state?.agent.id ?? '', score: 0, confirmed: false, chars: 0, action,
+        ...(state ? { turn: state.turn, step: state.step } : {}) });
+      warn(`flash-stabilizer: monitor unavailable (${action}); output is still forwarded`);
+    }
   };
   const stateFor = (agent: Agent): SessionState => {
     let state = states.get(agent.id);
@@ -162,12 +168,12 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
         state.request = request;
         monitoredRequests++; lastMonitoredAt = new Date().toISOString();
         state.monitoredRequests++; state.lastMonitoredAt = lastMonitoredAt; state.coverage = 'checked';
-      });
+      }, state);
       const ownRequest = request;
       let completed = false;
       try {
         for await (const chunk of upstream) {
-          if (compatibility.adapter === 'stream-waterfall' && ownRequest && state.request === ownRequest) guarded(() => ownRequest.monitor.push(chunk));
+          if (compatibility.adapter === 'stream-waterfall' && ownRequest && state.request === ownRequest) guarded(() => ownRequest.monitor.push(chunk), state);
           yield chunk;
         }
         completed = true;
@@ -184,12 +190,14 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   });
 
   if (compatibility.adapter === 'live-frames') {
-    ctx.on('agent/assistant-stream', ({ agent, frame }: { agent: Agent; frame: { type: string; attemptId: string; chunk?: Chunk } }) => guarded(() => {
+    ctx.on('agent/assistant-stream', ({ agent, frame }: { agent: Agent; frame: { type: string; attemptId: string; chunk?: Chunk } }) => {
       const state = states.get(agent.id);
       if (!state || state.agent !== agent) return;
-      if (frame.type === 'start') { state.frameId = frame.attemptId; if (state.request) state.request.frameId = frame.attemptId; return; }
-      if (frame.type === 'chunk' && frame.chunk && state.enabled && state.request?.frameId === frame.attemptId) state.request.monitor.push(frame.chunk);
-    }));
+      guarded(() => {
+        if (frame.type === 'start') { state.frameId = frame.attemptId; if (state.request) state.request.frameId = frame.attemptId; return; }
+        if (frame.type === 'chunk' && frame.chunk && state.enabled && state.request?.frameId === frame.attemptId) state.request.monitor.push(frame.chunk);
+      }, state);
+    });
   }
   ctx.on('tools/result', (exec: ToolExecution, result: ToolResult) => guarded(() => {
     if (!exec.agent) return;
@@ -261,9 +269,12 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       }
     }),
     selfTest: () => {
-      let passed = false;
-      const monitor = new StreamMonitor(config, evidence => { if (evidence.confirmed) passed = true; });
-      monitor.push({ type: 'reasoning-delta', index: 0, text: '好。执行。好。'.repeat(Math.ceil(config.windowChars * 3 / 7)) });
+      const passed = ['好。执行。好。', '好。'].every(unit => {
+        let confirmed = false;
+        const monitor = new StreamMonitor(config, evidence => { if (evidence.confirmed) confirmed = true; });
+        monitor.push({ type: 'reasoning-delta', index: 0, text: unit.repeat(Math.ceil(config.windowChars * 3 / unit.length)) });
+        return confirmed;
+      });
       return { passed, scope: 'offline-detector-only', modelRequests: 0 };
     },
     setSessionEnabled: (sessionId, enabled) => guarded(() => {

@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -33,23 +32,6 @@ interface Asset { id: number; name: string; size: number; digest?: string }
 interface Candidate { version: string; asset: Asset; checksum: Asset | undefined }
 class UpdateFailure extends Error {}
 const failure = (code: string): never => { throw new UpdateFailure(code); };
-
-/** Credentials stay in the host process; no interactive prompts or browser token entry. */
-export async function githubCredential(): Promise<string | undefined> {
-  const supplied = process.env.DSH_FLASH_STABILIZER_GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  if (supplied) return supplied;
-  return new Promise(resolve => {
-    const child = execFile('git', ['credential', 'fill'], {
-      windowsHide: true, timeout: 10000, maxBuffer: 64 * 1024,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' },
-    }, (error, stdout) => {
-      if (error) { resolve(undefined); return; }
-      resolve(stdout.split(/\r?\n/).find(line => line.startsWith('password='))?.slice(9));
-    });
-    child.stdin?.end('protocol=https\nhost=github.com\n\n');
-    child.on('error', () => resolve(undefined));
-  });
-}
 
 export function releaseCandidate(value: unknown, current: string): Candidate | null {
   const release = value as { draft?: boolean; prerelease?: boolean; tag_name?: string; assets?: Asset[] };
@@ -105,7 +87,7 @@ export class Updater implements UpdateAPI {
   private nextCheck = Date.now();
   constructor(private readonly options: {
     directory: string; hostVersion: string; manager: Manager; idle: () => boolean;
-    fetch?: typeof fetch; credential?: () => Promise<string | undefined>;
+    fetch?: typeof fetch;
     currentVersion?: string; schedule?: boolean;
   }) {
     this.directory = join(options.directory, '.flash-stabilizer', 'updates');
@@ -149,18 +131,18 @@ export class Updater implements UpdateAPI {
     if (enabled && this.state.automatic) void this.check();
     return this.status();
   }
-  private async request(path: string, token: string | undefined, limit: number, binary = false): Promise<Buffer> {
+  private async request(path: string, limit: number, binary = false): Promise<Buffer> {
     const transport = this.options.fetch ?? fetch;
     const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(30000)]);
     const response = await transport(API + path, { redirect: 'manual', signal, headers: {
       Accept: binary ? 'application/octet-stream' : 'application/vnd.github+json', 'User-Agent': manifest.name,
-      'X-GitHub-Api-Version': '2022-11-28', ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'X-GitHub-Api-Version': '2022-11-28',
     } });
     let result = response;
     if (binary && [301, 302, 303, 307, 308].includes(response.status)) {
       const target = new URL(response.headers.get('location') ?? '');
       if (target.protocol !== 'https:' || target.port || target.username || target.password || !['release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'github-releases.githubusercontent.com'].includes(target.hostname)) return failure('invalid-redirect');
-      // A signed GitHub asset redirect needs no credentials. Never forward the token.
+      // Signed GitHub asset redirects also use anonymous requests.
       await response.body?.cancel();
       result = await transport(target, { redirect: 'error', signal });
     }
@@ -186,9 +168,7 @@ export class Updater implements UpdateAPI {
       this.pending = false; this.candidate = null;
       this.state.phase = 'checking'; this.state.error = null;
       try {
-        const token = await (this.options.credential ?? githubCredential)();
-        if (this.disposed) return this.status();
-        const body = await this.request('/releases/latest', token, 1024 * 1024);
+        const body = await this.request('/releases/latest', 1024 * 1024);
         this.candidate = releaseCandidate(JSON.parse(body.toString()), this.state.currentVersion);
         this.state.checkedAt = new Date().toISOString();
         this.state.latestVersion = this.candidate?.version ?? this.state.currentVersion;
@@ -211,11 +191,10 @@ export class Updater implements UpdateAPI {
   }
   private async performInstall(candidate: Candidate): Promise<void> {
     try {
-      const token = await (this.options.credential ?? githubCredential)();
-      const archive = await this.request(`/releases/assets/${candidate.asset.id}`, token, MAX_ARCHIVE, true);
+      const archive = await this.request(`/releases/assets/${candidate.asset.id}`, MAX_ARCHIVE, true);
       let hash = candidate.asset.digest?.match(/^sha256:([a-f\d]{64})$/i)?.[1]?.toLowerCase();
       if (!hash && candidate.checksum) {
-        const sums = (await this.request(`/releases/assets/${candidate.checksum.id}`, token, 64 * 1024, true)).toString();
+        const sums = (await this.request(`/releases/assets/${candidate.checksum.id}`, 64 * 1024, true)).toString();
         hash = sums.split(/\r?\n/).map(line => /^([a-f\d]{64})\s+\*?(\S+)$/.exec(line)).find(match => match?.[2] === candidate.asset.name)?.[1];
       }
       if (!hash || createHash('sha256').update(archive).digest('hex') !== hash) return failure('checksum-failed');

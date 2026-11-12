@@ -131,10 +131,35 @@ describe('repeat evidence', () => {
     filter.push('ordinary text\n'.repeat(10000), text => { emitted.push(text); return emitted.length < 3; }, () => {});
     expect(emitted.join('')).toBe('ord');
   });
-  it.each(['哈。', '1234567890'])('does not confirm single-letter or numeric-only spam: %s', unit => {
+  it.each(['好。', '哈。', 'a!', '𐐀!'])('confirms sustained single-letter reasoning sentences: %s', unit => {
+    for (const size of [1, 7, 73, 4096]) {
+      const events: { confirmed: boolean; method?: string; chars: number }[] = [];
+      const monitor = new StreamMonitor(defaults, e => events.push(e));
+      chunks(unit.repeat(17233), size).forEach(c => monitor.push(c));
+      const confirmed = events.filter(e => e.confirmed);
+      expect(confirmed).toHaveLength(1);
+      expect(confirmed[0]).toMatchObject({ method: 'phrase' });
+      expect(confirmed[0]!.chars).toBeLessThanOrEqual(1024);
+      expect(monitor.snapshot().risk).toBe('confirmed');
+    }
+  });
+  it('detects intermittent single-letter reasoning after a normal preamble', () => {
+    const events: { confirmed: boolean }[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
+    const loop = Array.from({ length: 800 }, (_, i) => `好。${i % 40 === 0 ? '再确认一次。' : ''}`).join('');
+    chunks('先核对模块依赖和输入边界。\n' + loop, 73).forEach(c => monitor.push(c));
+    expect(events.filter(e => e.confirmed)).toHaveLength(1);
+  });
+  it.each([
+    ['text', '好。'.repeat(17233)],
+    ['reasoning', '好'.repeat(17233)],
+    ['reasoning', '1234567890'.repeat(2000)],
+    ['reasoning', '好。'.repeat(80) + Array.from({ length: 150 }, (_, i) => `证据 ${i} 排除了假设 ${i * i}，继续检查模块 ${i + 1}。`).join('\n')],
+    ['reasoning', Array.from({ length: 200 }, (_, i) => `条目 ${i}。好。好。好。好。好。好。`).join('\n')],
+    ['reasoning', '```text\n' + '好。'.repeat(2000) + '\n```'],
+  ])('does not confirm single-letter body, data, quoted or progressing text (%s)', (type, text) => {
     const events: { confirmed: boolean }[] = [];
     const monitor = new StreamMonitor(defaults, e => events.push(e));
-    chunks(unit.repeat(2000)).forEach(c => monitor.push(c));
+    chunks(text, 73, type).forEach(c => monitor.push(c));
     expect(events.some(e => e.confirmed)).toBe(false);
   });
   it('does not interrupt long, changing reasoning', () => {

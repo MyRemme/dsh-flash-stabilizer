@@ -44,7 +44,12 @@ try {
       requests++;
       if (options.messages.some(m => m.role === 'user' && m.content?.some(c => c.type === 'text' && c.text.includes('检测到当前步骤出现重复推理。')))) correctionsSeen++;
       assert.equal(options.model, 'deepseek-flash');
-      if (['checklist', 'body-loop', 'queued-steering', 'queued-followup'].includes(response)) {
+      if (['checklist', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup'].includes(response)) {
+        if (response === 'tool-then-single' && ++queuedStep === 1) {
+          yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'before-single-loop', name: 'read_evidence', arguments: '{}' } };
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }; return;
+        }
+        assert.ok(response !== 'tool-then-single' || queuedStep === 2, 'bounded post-tool loop test');
         const queued = response.startsWith('queued-');
         if (queued && ++queuedStep === 2) {
           assert.ok(options.messages.some(message => message.content?.some(block => block.type === 'text' && block.text === 'Handle queued user input.')));
@@ -53,6 +58,7 @@ try {
         }
         assert.ok(!queued || queuedStep === 1, 'bounded queued input test');
         const blocks = response === 'checklist' ? [{ type: 'reasoning', text: Array.from({ length: 100 }, (_, i) => `项目 ${i}。检查。通过。保留。\n`).join('') }]
+          : ['single-letter', 'single-body', 'tool-then-single'].includes(response) ? [{ type: response === 'single-body' ? 'text' : 'reasoning', text: '好。'.repeat(17233) }]
           : response === 'body-loop' ? [{ type: 'text', text: 'Template line, repeat as requested. '.repeat(200) }, { type: 'reasoning', text: '检查。继续。'.repeat(1000) }]
             : [{ type: 'reasoning', text: '检查。继续。'.repeat(1000) }];
         for (const [index, block] of blocks.entries()) {
@@ -194,7 +200,7 @@ try {
   assert.ok(ctx.flashStabilizer.status().events.some(e => e.action === 'stop-confirmed'), 'durable host stop confirmed');
   assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
   checks.push('guard-cancel', 'guard-settlement', 'guard-no-retry', 'guard-no-prompt');
-  for (const scenario of ['checklist', 'body-loop', 'queued-steering', 'queued-followup']) {
+  for (const scenario of ['checklist', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup']) {
     response = scenario; queuedStep = 0;
     current = await ctx.agentLoop.create(sessions.SessionId(`${scenario}-${version}`), { provider: 'mock', model: 'deepseek-flash' });
     const before = requests;
@@ -211,6 +217,16 @@ try {
     if (scenario === 'checklist') {
       assert.ok(status.events.some(event => event.uncertainty === 'changing-numbered-units' && event.action === 'notify-only'));
       assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);
+    } else if (['single-letter', 'tool-then-single'].includes(scenario)) {
+      assert.equal(status.confirmed, 1); assert.equal(status.cancelRequested, 1);
+      assert.ok(status.events.some(event => event.action === 'stop-confirmed'));
+      assert.equal(requests - before, scenario === 'tool-then-single' ? 2 : 1);
+      assert.equal(status.recoverySubmitted, 0);
+      assert.ok(status.live.reasoningChars < 1200, 'single-letter stop occurs before consuming the full loop');
+      if (scenario === 'tool-then-single') assert.equal(status.toolResults, 1, 'prior tool progress does not disable protection');
+    } else if (scenario === 'single-body') {
+      assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);
+      assert.equal(status.live.textChars, 34466);
     } else if (scenario === 'body-loop') {
       assert.deepEqual(status.events.filter(event => event.confirmed).map(event => event.contentType).sort(), ['reasoning', 'text']);
       assert.ok(status.events.some(event => event.action === 'stop-confirmed'));
