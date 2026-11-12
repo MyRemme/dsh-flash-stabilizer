@@ -22,6 +22,7 @@ export interface StabilizerAPI {
     monitoredRequests: number; activeRequests: number; confirmed: number; toolWarnings: number; recoverySubmitted: number; cancelRequested: number;
     lastMonitoredAt: string | null; latestEvent: DiagnosticEvent | null; events: ReturnType<MetricsStore['forSession']>;
     turn: number; step: number; toolResults: number; lastToolAt: string | null;
+    counterScope: 'tracked' | 'retained-events';
     live: (ReturnType<StreamMonitor['snapshot']> & { turn: number; step: number; startedAt: string; active: boolean; silentForMs: number }) | null;
   };
   /** Owner UI only; excluded from status(), disk and export. */
@@ -48,8 +49,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const detected = detectHostVersion();
   const compatibility = compatibilityFor(config.hostVersion || detected || '');
   // Explicit version is an observation hint, never permission to unlock recovery.
-  if (config.hostVersion && detected !== config.hostVersion) compatibility.intervention = false;
-  const effectiveMode = config.mode === 'auto' && !compatibility.intervention ? 'observe' : config.mode;
+  if (config.hostVersion && detected !== config.hostVersion) { compatibility.intervention = false; compatibility.guard = false; }
+  const effectiveMode = config.mode === 'auto' && !compatibility.intervention || config.mode === 'guard' && !compatibility.guard ? 'observe' : config.mode;
   const states = new Map<string, SessionState>();
   const disabledSessions = new Set<string>(config.disabledSessions);
   let disposed = false;
@@ -74,10 +75,10 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       ? `Flash Stabilizer：${event.kind}，风险分数 ${event.score}，动作 ${event.action ?? 'observe'}；详情见「Flash 防空转」面板。`
       : `Flash Stabilizer: ${event.kind}, risk ${event.score}, action ${event.action ?? 'observe'}.`);
   };
-  const recovery = new RecoveryController(config, (action, agent) => {
+  const recovery = new RecoveryController({ ...config, mode: effectiveMode }, (action, agent, origin) => {
     const state = states.get(agent.id);
     report({ kind: 'recovery', session: agent.id, score: 0, confirmed: false, chars: 0, action,
-      ...(state ? { turn: state.turn, step: state.step } : {}) });
+      ...(origin ?? (state ? { turn: state.turn, step: state.step } : {})) });
   });
   const guarded = (operation: () => void) => {
     if (disposed) return;
@@ -136,15 +137,19 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       let request: SessionState['request'];
       guarded(() => {
         if (!monitoring || !state.enabled || states.get(state.agent.id) !== state || signal !== state.signal) return;
+        const origin = { turn: state.turn, step: state.step }, noticeKeys = new Set<string>();
         const monitor = new StreamMonitor(config, evidence => {
           const key = evidence.confirmed ? 'confirmed' : 'suspected';
-          if (!state.noticeKeys.has(key)) {
-            state.noticeKeys.add(key);
+          if (!noticeKeys.has(key)) {
+            noticeKeys.add(key);
             report({ kind: 'stream-repeat', session: state.agent.id, score: evidence.score, confirmed: evidence.confirmed, chars: evidence.chars,
               period: evidence.period, repeats: evidence.repeats, coverage: evidence.coverage, novelty: evidence.novelty,
-              action: effectiveMode === 'observe' ? 'observe-only' : 'awaiting-recovery-decision', contentType: evidence.contentType, turn: state.turn, step: state.step });
+              ...(evidence.method ? { method: evidence.method } : {}),
+              action: effectiveMode === 'observe' ? 'observe-only' : 'awaiting-recovery-decision', contentType: evidence.contentType, ...origin });
           }
-          if (evidence.confirmed) recovery.request(state.agent, signal, compatibility.intervention);
+          if (evidence.confirmed && signal === state.signal && state.agent === states.get(state.agent.id)?.agent && monitoring && state.enabled
+            && (effectiveMode !== 'guard' || evidence.contentType === 'reasoning'))
+            recovery.request(state.agent, signal, effectiveMode === 'guard' ? compatibility.guard : compatibility.intervention, origin);
         });
         state.noticeKeys.clear();
         state.latestEvent = null;
@@ -217,14 +222,17 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     sessionStatus: sessionId => {
       const state = states.get(sessionId);
       const activity = state?.activity, live = activity?.monitor.snapshot();
+      const events = metrics.forSession(sessionId);
+      const retained = (kind: string, action?: string) => events.filter(event => event.kind === kind && (action ? event.action === action : event.confirmed)).length;
       return {
         monitoring: monitoring && !disposed, mode: effectiveMode, startedAt,
         coverage: !monitoring || disposed ? 'paused' : disabledSessions.has(sessionId) ? 'disabled'
           : state?.request ? 'monitoring' : state?.coverage ?? 'waiting',
         monitoredRequests: state?.monitoredRequests ?? 0, activeRequests: state?.request ? 1 : 0,
-        confirmed: state?.confirmed ?? 0, toolWarnings: state?.toolWarnings ?? 0,
-        recoverySubmitted: state?.recoverySubmitted ?? 0, cancelRequested: state?.cancelRequested ?? 0,
-        lastMonitoredAt: state?.lastMonitoredAt ?? null, latestEvent: state?.latestEvent ? { ...state.latestEvent } : null, events: metrics.forSession(sessionId),
+        counterScope: state ? 'tracked' : 'retained-events',
+        confirmed: state?.confirmed ?? retained('stream-repeat'), toolWarnings: state?.toolWarnings ?? events.filter(e => e.kind === 'tool-repeat').length,
+        recoverySubmitted: state?.recoverySubmitted ?? retained('recovery', 'recovery-submitted'), cancelRequested: state?.cancelRequested ?? retained('recovery', 'cancel-requested'),
+        lastMonitoredAt: state?.lastMonitoredAt ?? null, latestEvent: state?.latestEvent ? { ...state.latestEvent } : state ? null : events[0] ?? null, events,
         turn: state?.turn ?? 0, step: state?.step ?? 0, toolResults: state?.toolResults ?? 0, lastToolAt: state?.lastToolAt ?? null,
         live: activity && live ? { ...live, turn: activity.turn, step: activity.step, startedAt: activity.startedAt,
           active: state.request === activity, silentForMs: state.request === activity ? Math.max(0, Date.now() - Date.parse(live.lastOutputAt ?? activity.startedAt)) : 0 } : null,
@@ -265,7 +273,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   };
   ctx.provide?.('flashStabilizer', api);
   registerUI(ctx, api);
-  if (config.mode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过自动干预验证，已使用观察模式。' : 'Flash Stabilizer: automatic intervention is not verified; using observation mode.');
+  if (config.mode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过所选干预模式验证，已使用观察模式。' : 'Flash Stabilizer: selected intervention is not verified; using observation mode.');
   metrics.record({ kind: 'compatibility', session: '', score: 0, confirmed: false, chars: 0, action: compatibility.reason });
   try { ctx.logger?.info(`flash-stabilizer: DSH ${compatibility.version}; ${compatibility.adapter}; ${effectiveMode}; ${compatibility.reason}`); } catch { /* Optional logger. */ }
   ctx.effect(() => async () => { disposed = true; recovery.dispose(); states.clear(); await metrics.close(); }, 'flash-stabilizer: stop and drain');

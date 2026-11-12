@@ -47,4 +47,5 @@ export interface Notice {
   period?: number; repeats?: number; action?: string;
   contentType?: 'reasoning' | 'text'; turn?: number; step?: number;
   coverage?: number; novelty?: number;
+  method?: 'periodic' | 'phrase';
 }

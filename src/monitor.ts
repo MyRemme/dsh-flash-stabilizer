@@ -19,29 +19,37 @@ export class StreamMonitor {
   private textChars = 0;
   private analyzedChars = 0;
   private checks = 0;
+  private closed = new Set<number>();
+  private incomplete = false;
   private lastOutputAt: string | null = null;
   private lastCheckAt: string | null = null;
   private evidence: (RepeatEvidence & { contentType: 'reasoning' | 'text' }) | null = null;
   snapshot() {
     return { reasoningChars: this.reasoningChars, textChars: this.textChars, analyzedChars: this.analyzedChars, checks: this.checks,
       lastOutputAt: this.lastOutputAt, lastCheckAt: this.lastCheckAt,
-      risk: this.reported ? 'confirmed' as const : this.evidence && this.evidence.score >= 70 ? 'suspected' as const : this.checks ? 'clear' as const : 'collecting' as const,
+      incomplete: this.incomplete,
+      risk: this.reported ? 'confirmed' as const : this.evidence && this.evidence.score >= 70 ? 'suspected' as const : this.incomplete ? 'incomplete' as const : this.checks ? 'clear' as const : 'collecting' as const,
       evidence: this.evidence ? { ...this.evidence } : null };
   }
   constructor(private readonly config: Settings, private readonly report: (e: RepeatEvidence & { contentType: 'reasoning' | 'text' }) => void) {}
   push(chunk: Chunk): void {
+    if (Number.isSafeInteger(chunk.index) && this.closed.has(chunk.index!)) return;
     // Lightweight counters keep advancing after confirmation; never restart scanning.
     this.countOutput(chunk);
+    if (chunk.type === 'block-end' && Number.isSafeInteger(chunk.index)) {
+      if (this.closed.size < 65536) this.closed.add(chunk.index!); else this.incomplete = true;
+      this.outputBlocks.delete(chunk.index!);
+    }
     if (this.reported) return;
     if (chunk.type === 'finish') { this.blocks.clear(); return; }
     if (!['block-start', 'reasoning-delta', 'text-delta', 'block-end'].includes(chunk.type) || !Number.isSafeInteger(chunk.index)) return;
     const index = chunk.index!;
     let block = this.blocks.get(index);
     if (!block) {
-      if (this.blocks.size >= 32) return;
+      if (this.blocks.size >= 32 || this.incomplete) { this.incomplete = true; return; }
+      const type = chunk.blockType ?? chunk.block?.type ?? (chunk.type === 'reasoning-delta' ? 'reasoning' : 'text');
       block = {
-        detector: new RepeatDetector(this.config),
-        type: chunk.blockType ?? chunk.block?.type ?? (chunk.type === 'reasoning-delta' ? 'reasoning' : 'text'),
+        detector: new RepeatDetector(this.config, type === 'reasoning'), type,
         filter: new FenceFilter(), closed: false, seen: false,
       };
       this.blocks.set(index, block);
@@ -52,6 +60,7 @@ export class StreamMonitor {
       if (!block.seen && (chunk.block?.type === 'text' || chunk.block?.type === 'reasoning')) this.feed(block, chunk.block.text ?? '');
       if (!this.reported) block.filter.finish(text => this.inspect(block!, text));
       block.closed = true;
+      this.blocks.delete(index);
       return;
     }
     if (typeof chunk.text !== 'string' || (chunk.type !== 'text-delta' && chunk.type !== 'reasoning-delta')) return;
@@ -63,7 +72,7 @@ export class StreamMonitor {
     if (!Number.isSafeInteger(chunk.index) || !['block-start', 'reasoning-delta', 'text-delta', 'block-end'].includes(chunk.type)) return;
     let block = this.outputBlocks.get(chunk.index!);
     if (!block) {
-      if (this.outputBlocks.size >= 32) return;
+      if (this.outputBlocks.size >= 32 || this.incomplete) { this.incomplete = true; return; }
       block = { seen: false, closed: false }; this.outputBlocks.set(chunk.index!, block);
     }
     if (block.closed) return;
@@ -85,12 +94,13 @@ export class StreamMonitor {
     block.filter.push(text, segment => {
       plain += segment;
       if (plain.length >= this.config.checkEveryChars) return flush();
-    }, () => { plain = ''; block.detector = new RepeatDetector(this.config); });
+    }, () => { plain = ''; block.detector = new RepeatDetector(this.config, block.type === 'reasoning'); });
     flush();
   }
   private inspect(block: BlockState, text: string): void {
-    for (let offset = 0; !this.reported && offset < text.length; offset += this.config.checkEveryChars) {
-      const before = block.detector.stats(), part = text.slice(offset, offset + this.config.checkEveryChars);
+    const interval = block.type === 'reasoning' ? Math.min(128, this.config.checkEveryChars) : this.config.checkEveryChars;
+    for (let offset = 0; !this.reported && offset < text.length; offset += interval) {
+      const before = block.detector.stats(), part = text.slice(offset, offset + interval);
       const result = block.detector.push(part), after = block.detector.stats();
       this.analyzedChars += part.length;
       if (after.checks > before.checks) {

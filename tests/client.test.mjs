@@ -112,6 +112,7 @@ it.each([
   [{ risk: 'collecting', active: true, reasoningChars: 0, textChars: 0, checks: 0, silentForMs: 100 }, '等待模型首个输出'],
   [{ risk: 'clear', active: true, reasoningChars: 4000, textChars: 0, checks: 3, silentForMs: 31000 }, '等待输出 · 尚不能判断'],
   [{ risk: 'collecting', active: false, reasoningChars: 15, textChars: 0, checks: 0, silentForMs: 0 }, '请求结束 · 检测样本不足'],
+  [{ risk: 'incomplete', incomplete: true, active: true, reasoningChars: 0, textChars: 0, checks: 0, silentForMs: 0 }, '检测不完整 · 内容块超限'],
 ])('labels incomplete observations honestly: %s', async (live, label) => {
   await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? { ...sessionData(), coverage: live.active ? 'monitoring' : 'checked', live } : baseline() }), 'a');
   expect(document.querySelector('.fs-dock-button').textContent).toContain(label);
@@ -214,6 +215,21 @@ it('shows tool observations and deferred corrections as distinct actions, with d
   expect(document.body.textContent).toContain('未阻止、跳过或重放任何工具');
   await act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+it('explains intermittent phrase evidence and distinguishes requested from confirmed stops', async () => {
+  const phrase = { kind: 'stream-repeat', method: 'phrase', contentType: 'reasoning', confirmed: true, period: 0, repeats: 80, coverage: 0.8, novelty: 0.1, turn: 8, step: 2 };
+  const data = { ...sessionData(), coverage: 'unavailable', mode: 'guard', cancelRequested: 1, events: [{ kind: 'recovery', action: 'cancel-requested' }, phrase] };
+  data.latestEvent = data.events[0];
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? structuredClone(data) : baseline() }), 'a');
+  expect(document.querySelector('.fs-dock-button').textContent).toContain('已请求中断');
+  await act(async () => { document.querySelector('.fs-dock-button').click(); });
+  expect(document.body.textContent).toContain('夹杂变化文字的短句反复出现');
+  expect(document.body.textContent).toContain('短句单元占比 80%');
+  expect(document.body.textContent).toContain('防护停止');
+  expect(document.body.textContent).not.toContain('周期 0');
+  data.latestEvent = { kind: 'recovery', action: 'stop-confirmed' };
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(document.querySelector('.fs-dock-button').textContent).toContain('已停止重复生成');
 });
 it('shows the current request while keeping earlier incidents in conversation details', async () => {
   const data = { ...sessionData(), coverage: 'monitoring', confirmed: 1,

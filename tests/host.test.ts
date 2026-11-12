@@ -11,4 +11,6 @@ it('loads and unloads in the real published DSH AgentLoop and detects actual too
   expect(result.checks).toContain('max-tokens-new-turn');
   expect(result.checks).toContain('recovery-tool-result');
   expect(result.checks).toContain('assist-user-stop');
+  expect(result.checks).toContain('guard-cancel');
+  expect(result.checks).toContain('guard-no-retry');
 }, 35000);

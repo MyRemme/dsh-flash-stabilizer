@@ -32,7 +32,7 @@ try {
   if (typeof ctx.tools.setExecutor === 'function') {
     const native = await load('@deepseek-ai/dsh-tool-executor-native'); await ctx.plugin(native);
   }
-  let response = 'normal', requests = 0, toolBodies = 0, correctionsSeen = 0;
+  let response = 'normal', requests = 0, toolBodies = 0, correctionsSeen = 0, guardClosed = false, guardConsumed = 0;
   let recoveryStep = 0, sawRecoveredToolResult = false, waitingReady;
   const turnReasons = [];
   ctx.on('session/event', (_session, event) => { if (event.type === 'turn/end') turnReasons.push(event.data.reason.kind); });
@@ -43,6 +43,17 @@ try {
       requests++;
       if (options.messages.some(m => m.role === 'user' && m.content?.some(c => c.type === 'text' && c.text.includes('检测到当前步骤出现重复推理。')))) correctionsSeen++;
       assert.equal(options.model, 'deepseek-flash');
+      if (response === 'guard') {
+        const text = Array.from({ length: 400 }, (_, i) => `检查。继续。\n${i % 9 === 0 ? `（备注 ${i}）再看一次。\n` : ''}`).join('');
+        try {
+          yield { type: 'block-start', index: 0, blockType: 'reasoning' };
+          for (let offset = 0; offset < text.length; offset += 73) {
+            options.signal.throwIfAborted(); guardConsumed += Math.min(73, text.length - offset);
+            yield { type: 'reasoning-delta', index: 0, text: text.slice(offset, offset + 73) };
+          }
+          throw new Error('Guard failed to stop the repetitive stream');
+        } finally { guardClosed = true; }
+      }
       if (response === 'max-tools') {
         recoveryStep++;
         if (recoveryStep === 2) {
@@ -145,6 +156,21 @@ try {
   assert.equal(requests - beforeStop, 1, 'user stop suppresses followup');
   assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
   checks.push('assist-user-stop', 'no-injected-residue');
+  await pluginFiber.dispose();
+  pluginFiber = ctx.plugin(stabilizer, { ...hostHint, mode: 'guard' }); await pluginFiber;
+  current = await ctx.agentLoop.create(sessions.SessionId(`guard-probe-${version}`), { provider: 'mock', model: 'deepseek-flash' });
+  response = 'guard';
+  const beforeGuard = requests, beforeGuardTools = toolBodies, beforeGuardCorrections = correctionsSeen;
+  await send();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requests - beforeGuard, 1, 'guard must not submit a recovery request');
+  assert.equal(toolBodies, beforeGuardTools, 'guard never replays tools');
+  assert.equal(correctionsSeen, beforeGuardCorrections, 'guard adds no correction prompt');
+  assert.equal(guardClosed, true, 'cancel closes the upstream iterator');
+  assert.ok(guardConsumed < 3000, 'stop before consuming the full loop');
+  assert.ok(ctx.flashStabilizer.status().events.some(e => e.action === 'stop-confirmed'), 'durable host stop confirmed');
+  assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
+  checks.push('guard-cancel', 'guard-settlement', 'guard-no-retry', 'guard-no-prompt');
   await pluginFiber.dispose();
   console.log('PROBE_RESULT ' + JSON.stringify({ version, status: 'passed', checks, requests, provider: 'deterministic-mock', node: process.version, packaged: !!process.argv[4] }));
 } finally { await ctx.fiber.dispose(); }

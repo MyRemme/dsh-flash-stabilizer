@@ -38,6 +38,7 @@ export class MetricsStore {
       ...(event.step === undefined ? {} : { step: event.step }),
       ...(event.coverage === undefined ? {} : { coverage: event.coverage }),
       ...(event.novelty === undefined ? {} : { novelty: event.novelty }),
+      ...(event.method === undefined ? {} : { method: event.method }),
     };
     this.recent.push(safe);
     if (event.session) this.references.set(safe.session, event.session);

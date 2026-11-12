@@ -6,6 +6,38 @@ import { FenceFilter } from '../src/fences.js';
 import { chunks, repeated } from './helpers.js';
 
 describe('repeat evidence', () => {
+  it.each([1, 7, 73, 4096])('detects intermittent short reasoning loops in a short sample (%i)', size => {
+    const events: { confirmed: boolean; method?: string; chars: number }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    const text = Array.from({ length: 170 }, (_, i) => `继续。检查。\n${i % 9 === 0 ? `（记录 ${i}）换一个位置。\n` : ''}`).join('');
+    chunks(text, size).forEach(c => monitor.push(c));
+    expect(events.find(e => e.confirmed)).toMatchObject({ method: 'phrase' });
+    expect(events.find(e => e.confirmed)!.chars).toBeLessThan(1536);
+  });
+  it('keeps the short-phrase detector out of intentional body repetition and changing data', () => {
+    for (const [type, text] of [
+      ['text', 'Repeat. Inspect.\n'.repeat(75)],
+      ['reasoning', Array.from({ length: 200 }, (_, i) => `时间 ${i}: 结果 ${i * i}。继续检查分支${i}。`).join('\n')],
+      ['reasoning', Array.from({ length: 200 }, (_, i) => `Status.\nEvidence ${i} refutes hypothesis ${i * i}. Next examine module ${i + 1}.`).join('\n')],
+    ]) {
+      const events: { confirmed: boolean }[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
+      chunks(text!, 73, type).forEach(c => monitor.push(c));
+      expect(events.some(e => e.confirmed)).toBe(false);
+    }
+  });
+  it('releases completed block slots and still suppresses duplicate block ends', () => {
+    const events: { confirmed: boolean }[] = [], monitor = new StreamMonitor(defaults, e => events.push(e));
+    for (let i = 0; i < 100; i++) monitor.push({ type: 'block-end', index: i, block: { type: 'tool-call' } });
+    monitor.push({ type: 'block-end', index: 100, block: { type: 'reasoning', text: repeated } });
+    monitor.push({ type: 'block-end', index: 100, block: { type: 'reasoning', text: repeated } });
+    expect(events.some(e => e.confirmed)).toBe(true);
+    expect(monitor.snapshot().reasoningChars).toBe(repeated.length);
+  });
+  it('marks excessive simultaneous blocks as incomplete instead of clean', () => {
+    const monitor = new StreamMonitor(defaults, () => {});
+    for (let i = 0; i < 33; i++) monitor.push({ type: 'block-start', index: i, blockType: 'reasoning' });
+    expect(monitor.snapshot()).toMatchObject({ risk: 'incomplete', incomplete: true });
+  });
   it('reports only content-free live counters, avoids block-end double counts, and keeps counting after confirmation', () => {
     const monitor = new StreamMonitor(defaults, () => {});
     const text = '好。执行。好。'.repeat(1500);

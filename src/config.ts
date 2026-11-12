@@ -1,6 +1,6 @@
 export interface Settings {
   enabled: boolean;
-  mode: 'observe' | 'assist' | 'auto';
+  mode: 'observe' | 'assist' | 'guard' | 'auto';
   models: string[];
   providers: string[];
   disabledSessions: string[];
@@ -42,7 +42,7 @@ export function resolveSettings(input: unknown = {}): Settings {
   if (result.windowChars > 16384 || result.windowChars < 512 || result.minChars < 512 || result.minChars > result.windowChars) throw new TypeError('require 512 <= minChars <= windowChars <= 16384');
   if (result.checkEveryChars < 64 || result.maxPeriod > 1024 || result.minPeriod < 8 || result.minPeriod > result.maxPeriod || result.maxPeriod * result.minRepeats > result.windowChars) throw new TypeError('invalid repeat window/period/check interval');
   if (result.minRepeats < 4 || result.confirmations < 2 || result.toolRepeatLimit < 3 || result.maxRecoveries > 2 || result.maxSessions > 1024 || result.maxLogBytes < 4096 || result.maxLogBytes > 16_777_216) throw new TypeError('unsafe or excessive limits');
-  if (!['observe', 'assist', 'auto'].includes(result.mode) || !['zh', 'en'].includes(result.language)) throw new TypeError('invalid mode or language');
+  if (!['observe', 'assist', 'guard', 'auto'].includes(result.mode) || !['zh', 'en'].includes(result.language)) throw new TypeError('invalid mode or language');
   if (typeof result.enabled !== 'boolean' || typeof result.logDir !== 'string' || typeof result.hostVersion !== 'string') throw new TypeError('invalid enabled/logDir/hostVersion');
   return result;
 }

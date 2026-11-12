@@ -1,5 +1,5 @@
 {
-  "testedAt": "2026-11-11T17:40:22.089Z",
+  "testedAt": "2026-11-12T12:26:00.693Z",
   "type": "real-host-core-with-mock-provider",
   "results": [
     {
@@ -19,9 +19,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -43,9 +47,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -67,9 +75,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -91,9 +103,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -115,9 +131,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -139,9 +159,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -163,9 +187,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -187,9 +215,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -211,9 +243,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -235,9 +271,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -259,9 +299,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -283,9 +327,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -307,9 +355,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -331,9 +383,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -355,9 +411,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -379,9 +439,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -403,9 +467,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -427,9 +495,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -451,9 +523,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -475,9 +551,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -499,9 +579,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -523,9 +607,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -547,9 +635,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -571,9 +663,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -595,9 +691,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -619,9 +719,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -648,9 +752,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -672,9 +780,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -696,9 +808,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -720,9 +836,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -744,9 +864,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -773,9 +897,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -797,9 +925,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -821,9 +953,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true
@@ -845,9 +981,13 @@
         "max-tokens-new-turn",
         "recovery-tool-result",
         "assist-user-stop",
-        "no-injected-residue"
+        "no-injected-residue",
+        "guard-cancel",
+        "guard-settlement",
+        "guard-no-retry",
+        "guard-no-prompt"
       ],
-      "requests": 19,
+      "requests": 20,
       "provider": "deterministic-mock",
       "node": "v24.20.0",
       "packaged": true

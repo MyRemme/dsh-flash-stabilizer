@@ -40,7 +40,7 @@ it('limits raw conversation navigation ids to the owner UI endpoint and keeps ex
   expect(event.coverage).toBeGreaterThanOrEqual(0.85);
   expect(event.novelty).toBeLessThanOrEqual(0.15);
   host.emit('agent/disposed', { agent });
-  expect(call('conversations').value[0]).toMatchObject({ sessionId: agent.id, tracked: false });
+  expect(call('conversations').value[0]).toMatchObject({ sessionId: agent.id, tracked: false, confirmed: 1, counterScope: 'retained-events' });
   expect(JSON.stringify(call('export').value)).not.toContain('private-ui-navigation');
   expect(JSON.stringify(call('snapshot').value)).not.toContain('private-ui-navigation');
 });
@@ -91,6 +91,7 @@ it('pausing revokes pending corrections and does not cancel the model or consume
   let followed = 0; agent.followup = () => { followed++; };
   await stream(host, agent, chunks(repeated), false);
   call('setMonitoring', { enabled: false });
+  expect(api.sessionStatus(agent.id).latestEvent?.action).toBe('correction-revoked');
   host.emit('session/event', { id: agent.id }, { type: 'turn/end', data: { reason: { kind: 'completed' } } });
   agent.status = 'idle'; host.emit('agent/status', { agent, status: 'idle' });
   await Promise.resolve(); expect(followed).toBe(0);
@@ -99,6 +100,16 @@ it('pausing revokes pending corrections and does not cancel the model or consume
   call('setMonitoring', { enabled: true });
   await stream(host, makeAgent('resumed'), chunks('ordinary content'), false);
   expect(api.status().monitoredRequests).toBe(2);
+});
+it('attributes a delayed old stream to its captured turn and step', async () => {
+  const { host, api } = setup(), agent = makeAgent('overlap'), controller = new AbortController();
+  const step = (turn: number, index: number) => host.emit('agent/pre-step', { agent, turn, step: index, signal: controller.signal, messages: [] }, () => Promise.resolve());
+  step(3, 1);
+  async function* upstream() { yield { type: 'text-delta', index: 0, text: 'preamble' }; yield { type: 'reasoning-delta', index: 1, text: repeated }; }
+  const iterator = host.waterfall('llm/stream', [{ sessionId: agent.id, model: 'deepseek-flash', signal: controller.signal }], () => upstream())[Symbol.asyncIterator]();
+  await iterator.next(); step(4, 2); await iterator.next();
+  expect(api.sessionStatus(agent.id).events.find(e => e.confirmed)).toMatchObject({ turn: 3, step: 1 });
+  await iterator.return();
 });
 it('validates the per-session endpoint and isolates each conversation without exporting raw ids', async () => {
   const { host, api, call } = setup();

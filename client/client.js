@@ -30,17 +30,23 @@ window.__ModuleLoader__.load({
       'intervention-unavailable': ['纠正不可用', '当前宿主或模式不支持该动作，未中断输出。'],
       'recovery-failed': ['纠正提交失败', '没有确认纠正成功，请检查当前对话。'],
       'cancel-requested': ['已请求中断', '已向宿主请求停止本次重复响应；不等于宿主已确认停止。'],
+      'stop-confirmed': ['已停止重复生成', '宿主已记录本轮因防护而停止；未自动重试或重放工具。'],
+      'stop-unconfirmed': ['停止结果未确认', '已结束跟踪，但没有收到属于本插件的停止确认。'],
+      'stop-failed': ['停止请求失败', '宿主未接受停止请求，请检查当前对话。'],
+      'correction-revoked': ['已撤销纠正', '监控关闭、请求中止或会话结束，待执行纠正已撤销。'],
     };
     const time = value => value ? new Date(value).toLocaleString() : '尚无';
-    const modeName = mode => mode === 'assist' ? '有限纠正' : '仅观察';
+    const modeName = mode => mode === 'guard' ? '防护停止' : mode === 'assist' ? '有限纠正' : '仅观察';
     function health(data) {
       if (data.tracked === false) return { label: '仅保留历史记录', tone: 'off' };
       const excluded = { paused: '监控已暂停', disabled: '此对话未启用', 'other-model': '当前模型不在监控范围', auxiliary: '辅助请求未监控', unavailable: '检测不完整 · 待下次请求', waiting: '待下次 Flash 请求' };
-      if (excluded[data.coverage]) return { label: excluded[data.coverage], tone: 'off' };
       const live = data.live, latest = data.latestEvent;
+      if (data.coverage === 'unavailable' && latest?.kind === 'recovery' && ['cancel-requested', 'stop-confirmed', 'stop-unconfirmed', 'stop-failed'].includes(latest.action)) return { label: labels[latest.action][0], tone: 'warn' };
+      if (excluded[data.coverage]) return { label: excluded[data.coverage], tone: 'off' };
       if (latest?.kind === 'recovery') return { label: labels[latest.action]?.[0] || '处理状态已更新', tone: 'warn' };
       if (live?.risk === 'confirmed' || (!live && latest?.kind === 'stream-repeat' && latest.confirmed)) return { label: '确认重复 · 未中断', tone: 'warn' };
       if (live?.risk === 'suspected' || (!live && latest?.kind === 'stream-repeat')) return { label: '疑似重复 · 观察中', tone: 'warn' };
+      if (live?.incomplete) return { label: '检测不完整 · 内容块超限', tone: 'off' };
       if (live?.active && live.silentForMs >= 30000) return { label: '等待输出 · 尚不能判断', tone: 'warn' };
       if (latest?.kind === 'tool-repeat') return { label: '工具重复 · 仅提醒', tone: 'warn' };
       if (data.coverage === 'monitoring') return { label: !live ? '正在监控' : live.checks ? '持续检测 · 暂未发现循环' : live.reasoningChars + live.textChars ? '接收输出 · 积累检测样本' : '等待模型首个输出', tone: 'on' };
@@ -49,8 +55,9 @@ window.__ModuleLoader__.load({
     function explain(event, mode) {
       if (event.kind === 'stream-repeat') return {
         title: event.confirmed ? `确认${event.contentType === 'text' ? '正文' : event.contentType === 'reasoning' ? '推理' : '输出'}重复` : '疑似重复',
-        reason: `检测到周期性短句轮转${event.period ? `，周期 ${event.period} 字符` : ''}${event.repeats ? `、重复 ${event.repeats} 次` : ''}${event.coverage === undefined ? '' : `，窗口覆盖 ${Math.round(event.coverage * 100)}%`}${event.novelty === undefined ? '' : `，新增四字符片段 ${Math.round(event.novelty * 100)}%`}。${event.confirmed ? '连续多次检查通过重复确认。' : '尚未达到连续确认条件。'}`,
-        result: event.confirmed && mode === 'assist' ? '仅确认重复；纠正是否排队或提交见后续处理记录。本次输出未中断。' : '仅告警，未拦截、未中断输出。',
+        reason: `检测到${event.method === 'phrase' ? '夹杂变化文字的短句反复出现' : '周期性短句轮转'}${event.period ? `，周期 ${event.period} 字符` : ''}${event.repeats ? `、重复 ${event.repeats} 次` : ''}${event.coverage === undefined ? '' : `，${event.method === 'phrase' ? '短句单元占比' : '窗口覆盖'} ${Math.round(event.coverage * 100)}%`}${event.novelty === undefined ? '' : `，新增四字符片段 ${Math.round(event.novelty * 100)}%`}。${event.confirmed ? '连续多次检查通过重复确认。' : '尚未达到连续确认条件。'}`,
+        result: event.confirmed && mode === 'guard' && event.contentType === 'reasoning' ? '已确认推理重复；停止请求和宿主确认见后续处理记录。'
+          : event.confirmed && mode === 'assist' ? '仅确认重复；纠正是否排队或提交见后续处理记录。本次输出未中断。' : '仅告警，未拦截、未中断输出。',
       };
       if (event.kind === 'tool-repeat') return { title: '工具重复告警', reason: `相同工具、参数及结果${event.repeats ? `连续出现 ${event.repeats} 次` : '重复出现'}，可能没有新增进展。`, result: '仅提醒，未阻止、跳过或重放任何工具。' };
       if (event.kind === 'recovery') return { title: labels[event.action]?.[0] || '纠正状态变更', reason: '此前检测到连续重复推理或正文。', result: labels[event.action]?.[1] || '请查看后续记录确认实际处理结果。' };
@@ -176,12 +183,12 @@ window.__ModuleLoader__.load({
           data && h(React.Fragment, null,
             h('dl', { className: 'fs-stats' }, stat('已监控请求', data.monitoredRequests), stat('当前请求', data.activeRequests), stat('确认重复', data.confirmed), stat('已提交纠正', data.recoverySubmitted)),
             h('section', { className: 'fs-section' }, h('div', { className: 'fs-section-head' }, h('h3', null, '运行状态'), status(label, online && data.monitoring ? 'on' : 'off')),
-              h('dl', { className: 'fs-facts' }, fact('处理模式', modeName(data.mode)), fact('检测后动作', data.mode === 'assist' ? '回合结束后可提交纠正' : '显示告警，不中断输出'), fact('最近监控', time(data.lastMonitoredAt)), fact('磁盘日志', !data.logging.enabled ? '未开启' : data.logging.healthy ? '写入正常' : '写入失败'))),
+              h('dl', { className: 'fs-facts' }, fact('处理模式', modeName(data.mode)), fact('检测后动作', data.mode === 'guard' ? '确认推理重复后请求停止本轮' : data.mode === 'assist' ? '回合结束后可提交纠正' : '显示告警，不中断输出'), fact('最近监控', time(data.lastMonitoredAt)), fact('磁盘日志', !data.logging.enabled ? '未开启' : data.logging.healthy ? '写入正常' : '写入失败'))),
             h('section', { className: 'fs-section', 'aria-label': '逐对话实时监控' }, h('div', { className: 'fs-section-head' }, h('h3', null, '对话实时监控'), h('span', { className: 'fs-muted' }, '每 2 秒同步')),
               (state.error || state.conversationError) && h('p', { className: 'fs-error' }, '连接中断，以下为上次同步数据，不能判断当前模型状态。'),
               h('div', { className: 'fs-conversations' }, state.conversations.length ? state.conversations.map(item => { const current = state.error || state.conversationError ? { label: '状态已过期 · 等待重新连接', tone: 'off' } : health(item); return h('article', { className: 'fs-conversation', key: item.sessionKey },
                 h('div', { className: 'fs-conversation-main' }, h('div', { className: 'fs-conversation-title' }, conversationName(item)), status(current.label, current.tone), h(Live, { data: item }),
-                  h('div', { className: 'fs-live' }, `累计确认重复 ${item.confirmed} 次 · 已提交纠正 ${item.recoverySubmitted} 次 · ${item.cancelRequested ? `请求中断 ${item.cancelRequested} 次` : '未拦截、未中断'}`), !item.tracked && h('p', { className: 'fs-muted' }, '会话已不在实时跟踪中，仅显示保留事件。')),
+                  h('div', { className: 'fs-live' }, `${item.counterScope === 'retained-events' ? '保留事件中' : '累计'}确认重复 ${item.confirmed} 次 · 已提交纠正 ${item.recoverySubmitted} 次 · ${item.cancelRequested ? `请求中断 ${item.cancelRequested} 次` : '未拦截、未中断'}`), !item.tracked && h('p', { className: 'fs-muted' }, '会话已不在实时跟踪中，仅显示保留事件。')),
                 h('div', { className: 'fs-tools' }, command('查看此对话记录', () => setFilter(item.sessionKey), UI.IconInfoOutlineRegular, false), command('打开对话', () => openConversation(item), null, !service('uiWorkspace')?.openSession))); }) : h('div', { className: 'fs-empty' }, '尚无已跟踪的对话；下一次匹配的模型请求开始后自动显示。')),
               h('p', { className: 'fs-health-note' }, '实时观察已收到的输出；“暂未发现循环”不保证后续不会重复，也不代表任务结果正确。长时间没有输出不直接判定为低熵循环。')),
             h('section', { className: 'fs-section' }, h('div', { className: 'fs-section-head' }, h('h3', null, '检测与处理'), h('span', { className: 'fs-muted' }, `${events.length} 条记录`)),

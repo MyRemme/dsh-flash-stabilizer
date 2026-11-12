@@ -4,6 +4,28 @@ import { RecoveryController } from '../src/recovery.js';
 import { makeAgent } from './helpers.js';
 const ending = { reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'dsh-flash-stabilizer: confirmed repetition' } } };
 describe('bounded recovery', () => {
+  it('guard requests a stop, confirms durable settlement, and never follows up', async () => {
+    const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() }, actions: string[] = [];
+    const c = new RecoveryController({ ...defaults, mode: 'guard' }, action => actions.push(action));
+    c.request(agent, new AbortController().signal, true);
+    expect(actions).toEqual(['cancel-requested']);
+    c.settled(agent, ending); await Promise.resolve();
+    expect(actions).toEqual(['cancel-requested', 'stop-confirmed']);
+    expect(agent.cancel).toHaveBeenCalledTimes(1); expect(agent.followup).not.toHaveBeenCalled();
+  });
+  it('guard cannot cancel unverified hosts or already aborted requests', () => {
+    const agent = { ...makeAgent(), cancel: vi.fn() }, c = new RecoveryController({ ...defaults, mode: 'guard' }, () => {});
+    c.request(agent, new AbortController().signal, false);
+    c.request(agent, AbortSignal.abort(), true);
+    expect(agent.cancel).not.toHaveBeenCalled();
+  });
+  it('records revoked deferred corrections so the UI cannot remain pending', () => {
+    const agent = { ...makeAgent(), followup: vi.fn() }, actions: string[] = [];
+    const c = new RecoveryController({ ...defaults, mode: 'assist' }, action => actions.push(action));
+    c.request(agent, new AbortController().signal, false);
+    c.setEnabled(agent, false); c.setEnabled(agent, true);
+    expect(actions).toEqual(['correction-deferred', 'correction-revoked']);
+  });
   it('cannot intervene in observation mode or unverified hosts', () => {
     const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() };
     new RecoveryController(defaults, () => {}).request(agent, new AbortController().signal, true);

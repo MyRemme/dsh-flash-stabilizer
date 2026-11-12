@@ -10,7 +10,7 @@ const matrix = JSON.parse(readFileSync(new URL('../compatibility/releases.json',
 export const releases = matrix.releases;
 export interface Compatibility {
   version: string; known: boolean; adapter: 'live-frames' | 'stream-waterfall'; lifecycle: string;
-  intervention: boolean; reason: string;
+  intervention: boolean; guard: boolean; reason: string;
 }
 /** Uses only package metadata, never loads another copy of a host service. */
 export function detectHostVersion(): string | undefined {
@@ -28,6 +28,7 @@ export function compatibilityFor(version: string): Compatibility {
     version: version || 'unknown', known: !!release, adapter: release?.adapter ?? 'stream-waterfall',
     lifecycle: release?.features.lifecycle ?? 'agent/created',
     intervention: !!verified,
+    guard: release?.hostTest === 'passed',
     reason: !release ? 'unrecognized-host' : verified ? 'host-tests-passed' : 'automatic-intervention-not-verified',
   };
 }
