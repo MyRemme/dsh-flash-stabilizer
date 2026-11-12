@@ -1,8 +1,9 @@
 import type { StabilizerAPI } from './index.js';
 import type { HostContext, RpcHandler } from './types.js';
+import type { UpdateAPI } from './updater.js';
 
 /** Uses the host's authenticated transport; never opens a separate listener. */
-export function registerUI(ctx: HostContext, api: StabilizerAPI): unknown {
+export function registerUI(ctx: HostContext, api: StabilizerAPI, updates: UpdateAPI): unknown {
   // The host binds RPC route ownership to this child context. Its route
   // registration reads webServer through that owner, so declare both services.
   return ctx.inject?.(['connection', 'webServer'], child => {
@@ -12,6 +13,11 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI): unknown {
       if (signal.aborted) return fail('ABORTED', 'Request cancelled');
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return fail('BAD_REQUEST', 'Invalid payload');
       const keys = Object.keys(payload);
+      if (endpoint === 'setAutomaticUpdates') {
+        const enabled = (payload as { enabled?: unknown }).enabled;
+        if (keys.length !== 1 || typeof enabled !== 'boolean') return fail('BAD_REQUEST', 'Expected enabled boolean');
+        return updates.setAutomatic(enabled).then(value => ({ ok: true, value }));
+      }
       if (endpoint === 'session') {
         const sessionId = (payload as { sessionId?: unknown }).sessionId;
         if (keys.length !== 1 || typeof sessionId !== 'string' || !sessionId.trim() || sessionId.length > 1024) return fail('BAD_REQUEST', 'Expected sessionId string');
@@ -24,6 +30,9 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI): unknown {
         return { ok: true, value: api.status() };
       }
       if (keys.length) return fail('BAD_REQUEST', 'Expected empty payload');
+      if (endpoint === 'updates') return { ok: true, value: updates.status() };
+      if (endpoint === 'checkUpdates') { void updates.check(); return { ok: true, value: updates.status() }; }
+      if (endpoint === 'installUpdate') return { ok: true, value: updates.install() };
       if (endpoint === 'conversations') return { ok: true, value: api.conversations() };
       if (endpoint === 'snapshot') return { ok: true, value: api.status() };
       if (endpoint === 'export') return { ok: true, value: { schemaVersion: 1, exportedAt: new Date().toISOString(), ...api.status() } };

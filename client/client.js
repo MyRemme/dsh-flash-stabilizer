@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
       return { title: event.kind === 'internal-error' ? '监控异常' : '监控已启动', reason: '', result: event.kind === 'internal-error' ? '当前检测可能不完整，模型输出继续传递。' : '观察模式已就绪。' };
     }
     function createController(ctx) {
-      let state = { data: null, conversations: [], conversationError: '', sessions: Object.create(null), sessionErrors: Object.create(null), error: '', busy: false, test: '', toast: null, updatedAt: null };
+      let state = { data: null, conversations: [], conversationError: '', sessions: Object.create(null), sessionErrors: Object.create(null), error: '', busy: false, test: '', toast: null, updatedAt: null, updates: null, updateError: '', updateBusy: false };
       const listeners = new Set(), requests = new Set(), downloads = new Map(), watched = new Map(), pendingSessions = new Set();
       let disposed = false, polling = false, listing = false, generation = 0, lastNotice = '';
       const publish = patch => { if (!disposed) { state = { ...state, ...patch }; for (const fn of listeners) fn(); } };
@@ -109,7 +109,22 @@ window.__ModuleLoader__.load({
         catch { if (generation === current) publish({ conversationError: '对话列表未连接，请刷新重试。' }); }
         finally { listing = false; }
       }
-      async function poll() { await Promise.all([refresh(), refreshConversations(), ...[...watched.keys()].map(refreshSession)]); }
+      let updatePolling = false;
+      async function refreshUpdates() {
+        if (disposed || updatePolling || state.updateBusy) return;
+        updatePolling = true;
+        try { const value = await call('updates'); if (value && typeof value.currentVersion === 'string') publish({ updates: value, updateError: '' }); }
+        catch { publish({ updateError: '更新服务未连接' }); }
+        finally { updatePolling = false; }
+      }
+      async function updateAction(endpoint, payload) {
+        if (disposed || state.updateBusy) return;
+        publish({ updateBusy: true, updateError: '' });
+        try { publish({ updates: await call(endpoint, payload) }); }
+        catch { publish({ updateError: '更新操作未完成，请检查状态后重试。' }); }
+        finally { publish({ updateBusy: false }); }
+      }
+      async function poll() { await Promise.all([refresh(), refreshConversations(), refreshUpdates(), ...[...watched.keys()].map(refreshSession)]); }
       async function action(endpoint, payload) {
         if (state.busy || disposed) return;
         generation++; publish({ busy: true, error: '' });
@@ -129,7 +144,7 @@ window.__ModuleLoader__.load({
       }
       const timer = setInterval(poll, 2000); poll();
       return {
-        subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, snapshot: () => state, refresh: poll, action,
+        subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, snapshot: () => state, refresh: poll, action, updateAction,
         watch: id => { watched.set(id, (watched.get(id) || 0) + 1); refreshSession(id); return () => { const count = watched.get(id) - 1; if (count) watched.set(id, count); else { watched.delete(id); const { [id]: _old, ...sessions } = state.sessions; const { [id]: _error, ...sessionErrors } = state.sessionErrors; publish({ sessions, sessionErrors }); } }; },
         dismiss: () => publish({ toast: null }),
         dispose: () => { disposed = true; clearInterval(timer); for (const request of requests) request.abort(); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); watched.clear(); listeners.clear(); },
@@ -196,7 +211,23 @@ window.__ModuleLoader__.load({
             h('section', { className: 'fs-section' }, h('div', { className: 'fs-section-head' }, h('h3', null, '检测与处理'), h('span', { className: 'fs-muted' }, `${events.length} 条记录`)),
               filter && command('显示全部对话', () => setFilter(''), UI.IconCloseOutlineRegular, false),
               events.length ? h(Events, { events, mode: data.mode, conversations: state.conversations }) : h('div', { className: 'fs-empty' }, '尚无检测记录'), h('p', { className: 'fs-note' }, '显示发生在哪个对话、第几轮、推理或正文的重复特征、原因和实际动作。不保存推理正文、工具参数或命令；导出不包含对话名称和原始 ID。'))),
+          h(Updates, { state }),
           h('footer', { className: 'fs-muted' }, `最近同步 ${time(state.updatedAt)}`)));
+      }
+      function Updates({ state }) {
+        const value = state.updates;
+        const phases = { unavailable: '此宿主不支持在线更新', idle: '尚未检查', checking: '正在检查', current: '已是最新正式版', available: '有新版本', 'waiting-idle': '等待所有对话空闲后安装', downloading: '正在下载并校验', installing: '正在交给 DSH 安装', 'restart-required': '已安装，需重启 DSH 生效', error: '更新未完成' };
+        const errors = { 'github-auth-or-release': '无法访问仓库或尚无正式 Release，请检查本机 GitHub 登录和仓库权限。', 'github-denied': 'GitHub 拒绝访问或请求额度已用完，请稍后重试。', 'missing-artifact': 'Release 缺少安装包或校验值。', 'checksum-failed': '安装包 SHA-256 校验失败，未安装。', 'incompatible-host': '新版本不支持当前 DSH 或 Node.js，未安装。', 'host-install-failed': 'DSH 未确认安装成功，请检查原生插件页。', 'storage-failed': '无法保存更新设置，自动更新未开启。', 'install-scripts': '安装包声明安装脚本，已拒绝自动安装。' };
+        const busy = state.updateBusy || ['checking', 'downloading', 'installing', 'restart-required'].includes(value?.phase);
+        return h('section', { className: 'fs-section', 'aria-label': '插件更新' },
+          h('div', { className: 'fs-section-head' }, h('h3', null, '插件更新'),
+            h('a', { className: 'fs-link', href: 'https://github.com/MyRemme/dsh-flash-stabilizer', target: '_blank', rel: 'noopener noreferrer', title: '打开 GitHub 仓库' }, icon(UI.IconLinkOutlineRegular), ' GitHub 仓库')),
+          h('dl', { className: 'fs-facts' }, fact('当前版本', value?.currentVersion || '读取中'), fact('最新正式版', value?.latestVersion || '尚未检查'), fact('更新状态', state.updateError || phases[value?.phase] || '连接中'), fact('最近检查', time(value?.checkedAt))),
+          h('div', { className: 'fs-tools', style: { marginTop: 12 } },
+            h('span', { className: 'fs-switch' }, '自动更新', h(UI.Switch, { label: '自动更新', checked: Boolean(value?.automatic), disabled: !value?.available || state.updateBusy, onChange: enabled => controller.updateAction('setAutomaticUpdates', { enabled }) })),
+            command('检查更新', () => controller.updateAction('checkUpdates'), UI.IconRefreshOutlineRegular, !value?.available || busy),
+            command('安装更新', () => controller.updateAction('installUpdate'), UI.IconDownloadOutlineRegular, !value?.available || busy || !['available', 'waiting-idle'].includes(value?.phase))),
+          value?.error && h('p', { className: 'fs-error', role: 'status' }, errors[value.error] || '下载、校验或安装未完成；当前版本继续保留，可检查更新后重试。'));
       }
       function SessionStatus({ sessionId }) {
         const state = useState(), data = state.sessions[sessionId], error = state.sessionErrors[sessionId];

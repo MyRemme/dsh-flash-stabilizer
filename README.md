@@ -1,4 +1,16 @@
-# DSH Flash Stabilizer 0.1.6
+# DSH Flash Stabilizer 0.1.7
+
+## 0.1.7：仓库入口与自动更新
+
+插件页新增可点击的 [GitHub 仓库](https://github.com/MyRemme/dsh-flash-stabilizer) 入口，以及「插件更新」区域：当前版本、最新正式版、最近检查、更新状态、自动更新开关、检查与安装按钮。仓库保持私有，浏览器访问需登录有权限的 GitHub 账号。
+
+自动更新默认关闭，开启后在启动时及每 6 小时检查仓库的最新正式 Release；也可手动检查与安装。更新设置保存在当前 profile 的 `.flash-stabilizer/updates/state.json`，不随插件重载丢失。只接受递增的正式版本，跳过草稿、预发布和降级。下载包保存在同目录，方便核查和手动恢复。
+
+更新请求固定访问此仓库的 GitHub API。私有仓库鉴权优先读取 `DSH_FLASH_STABILIZER_GITHUB_TOKEN`、`GH_TOKEN`、`GITHUB_TOKEN`，否则调用本机 `git credential fill` 使用已有凭据，不弹出登录、不保存令牌，也不把令牌返回界面或诊断导出。令牌需有此私有仓库的内容读取权限。无法访问时界面会报告权限、网络或尚无正式 Release 的问题，不影响推理监控。GitHub 签名资源跳转不转发鉴权头。
+
+安装前校验 GitHub 资产摘要或 `checksums.sha256`、包名与版本、压缩包路径和条目类型、安装脚本及 DSH/Node.js 兼容范围。仅在宿主列出的所有 Agent 都空闲、无待处理输入、无监控请求时交给 DSH `pluginManager.installBundle()`；下载结束后再次检查空闲。更新期间新发起的请求仍由宿主管理，不锁定聊天。安装后需重启时明确显示「已安装，需重启 DSH 生效」，不会自行重启、结束对话或关闭其他进程。未知/缺少更新接口的宿主停用更新控件，监控仍独立工作。
+
+SHA-256 用于校验发布资产完整性，并非独立签名；仓库账号或 Release 本身被攻破不在此校验的保护范围。包内携带已固定的更新模块运行依赖，更新不授权额外依赖构建脚本。安装失败由 DSH 恢复其清单和锁文件；插件保留下载包，不承诺自动回滚所有宿主加载失败。正式版发布者应先完成测试再创建 Release，流程见文末。
 
 ## 0.1.6：审查问题修复
 
@@ -193,7 +205,7 @@ flowchart TD
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.6.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.7.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -203,7 +215,7 @@ dsh --profile desktop --dump-config
 dsh plugin --profile desktop remove dsh-flash-stabilizer
 ```
 
-安装包保存在本地，源码保存在私有 GitHub 仓库，未发布到 npm 或 GitHub Releases。安装方式依据 [官方插件打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/docs/user/develop/basic/publish.zh.md)。
+安装包保存在本地及私有 GitHub Release，源码保存在同一私有仓库，未发布到 npm。安装方式依据 [官方插件打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/docs/user/develop/basic/publish.zh.md)。
 
 ## 配置
 
@@ -279,7 +291,7 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.6.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.7.tgz
 ```
 
 `npm run check` 包含类型检查、构建及自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。
@@ -287,6 +299,10 @@ node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.6.tgz
 优化前构建可保存在仓库外或 `.compat-cache/`，用 `node scripts/benchmark-detection.mjs '<旧版 dist 目录>'` 对照 10,100 组输入及长流告警结果，并测量本地检测耗时。这是检测器基准，不是模型生成速度、Token 消耗或恢复质量测试。
 
 上述自动化和兼容性测试使用确定性输出，不需要 API Key。源码在 `src/`，测试在 `tests/`，审查报告在 [FEASIBILITY_REVIEW.zh-CN.md](FEASIBILITY_REVIEW.zh-CN.md)，每版本接口来源及 SHA 在 `compatibility/releases.json`。
+
+### 发布更新
+
+修改版本后运行 `npm run check`、打包及安装包宿主矩阵，审查隐私并提交推送。然后执行 `node --use-env-proxy scripts/release-github.mjs`，使用已有 GitHub 凭据创建私有正式 Release，上传安装包与 `checksums.sha256`。脚本要求工作区干净、远端 main 与本地 HEAD 一致、仓库私有且此版本尚未发布；先创建草稿，资产上传完成才发布，不覆盖已有 Release。其他已启用自动更新的安装在下次检查时获取此版本。只推送源码提交不会触发客户端安装。
 
 ### 真实模型的原生基线
 

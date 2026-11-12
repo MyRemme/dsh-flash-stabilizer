@@ -47,6 +47,20 @@ async function mount(call, sessionId, services = {}) {
   return { slots, url, selectPanel };
 }
 const button = text => [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === text || b.textContent === text);
+it('links to the repository and exposes persistent automatic and manual update controls', async () => {
+  const update = { repository: 'https://github.com/MyRemme/dsh-flash-stabilizer', currentVersion: '0.1.7', latestVersion: '0.1.8', available: true, automatic: false, phase: 'available' };
+  const call = vi.fn(async (_channel, method, payload) => {
+    if (method === 'setAutomaticUpdates') update.automatic = payload.enabled;
+    if (method === 'installUpdate') update.phase = 'waiting-idle';
+    return { ok: true, value: method === 'conversations' ? [] : ['updates', 'setAutomaticUpdates', 'checkUpdates', 'installUpdate'].includes(method) ? { ...update } : baseline() };
+  });
+  await mount(call);
+  expect(document.querySelector('a[title="打开 GitHub 仓库"]').href).toBe(update.repository);
+  expect(document.body.textContent).toContain('0.1.7'); expect(document.body.textContent).toContain('有新版本');
+  await act(async () => { button('自动更新').click(); }); expect(update.automatic).toBe(true);
+  await act(async () => { button('检查更新').click(); }); expect(call).toHaveBeenCalledWith('/flash-stabilizer', 'checkUpdates', {}, expect.anything());
+  await act(async () => { button('安装更新').click(); }); expect(document.body.textContent).toContain('等待所有对话空闲后安装');
+});
 it('registers discoverable native entries and renders actual monitoring state with working controls', async () => {
   const data = baseline();
   const call = vi.fn(async (_channel, method, payload) => {

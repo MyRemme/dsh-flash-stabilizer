@@ -9,7 +9,10 @@ function setup() {
   const host = new FakeHost(); hosts.push(host);
   let handler: Parameters<ConnectionService['rpc']['handle']>[1];
   const connection = { rpc: { handle: (channel: string, fn: typeof handler) => { expect(channel).toBe('/flash-stabilizer'); handler = fn; } } };
-  (host as HostContext).inject = (names, callback) => { expect(names).toEqual(['connection', 'webServer']); callback(Object.assign(host, { connection })); };
+  (host as HostContext).inject = (names, callback) => {
+    if (names.includes('pluginManager')) return;
+    expect(names).toEqual(['connection', 'webServer']); callback(Object.assign(host, { connection }));
+  };
   apply(host, { hostVersion: '0.1.0-rc.7', mode: 'assist' });
   const api = host.values.get('flashStabilizer') as StabilizerAPI;
   const call = (endpoint: string, payload: unknown = {}, kind = 'owner', signal = new AbortController().signal) =>
@@ -23,6 +26,10 @@ it('requires an owner and validates every UI operation before changing state', (
   for (const payload of [null, [], { enabled: 'false' }, { enabled: false, path: '/etc' }]) expect(call('setMonitoring', payload).ok).toBe(false);
   expect(call('snapshot', { extra: true }).ok).toBe(false);
   expect(call('unknown').error?.code).toBe('NOT_FOUND');
+  expect(call('installUpdate', {}, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('checkUpdates', { url: 'https://untrusted.invalid/' }).error?.code).toBe('BAD_REQUEST');
+  expect(call('setAutomaticUpdates', { enabled: 'yes' }).error?.code).toBe('BAD_REQUEST');
+  expect(call('updates').value.phase).toBe('unavailable');
   expect(call('setMonitoring', { enabled: false }, 'owner', AbortSignal.abort()).error?.code).toBe('ABORTED');
   expect(call('setMonitoring', { enabled: false }).value.monitoring).toBe(false);
 });

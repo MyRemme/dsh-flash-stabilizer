@@ -18,7 +18,7 @@ it('registers the authenticated route in an injected Cordis owner and removes it
     await ctx.plugin(ctx => ctx.provide('webServer', { register: route => { routes.set(route.path, route); return () => routes.delete(route.path); } }));
     await ctx.plugin(Connection);
     const api = { status: () => ({ monitoring: true }) };
-    const plugin = await registerUI(ctx, api);
+    const plugin = await registerUI(ctx, api, { status: () => ({ phase: 'unavailable' }) });
     expect(routes.has('/flash-stabilizer')).toBe(true);
     const result = await routes.get('/flash-stabilizer').handler('snapshot', {}, new AbortController().signal, { principal: { kind: 'owner' } });
     expect(result).toEqual({ ok: true, value: { monitoring: true } });

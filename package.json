@@ -1,9 +1,13 @@
 {
   "name": "dsh-flash-stabilizer",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "DSH Flash 推理重复监控、工具重复告警与有限软纠正插件",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://github.com/MyRemme/dsh-flash-stabilizer",
+  "repository": { "type": "git", "url": "git+https://github.com/MyRemme/dsh-flash-stabilizer.git" },
+  "bugs": { "url": "https://github.com/MyRemme/dsh-flash-stabilizer/issues" },
+  "bundleDependencies": ["semver", "tar"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -46,7 +50,11 @@
         "@deepseek-ai/dsh-client-ui-plugin-manager"
       ],
       "platform": "web",
-      "external": ["react", "react-dom", "@deepseek-ai/dsh-client-ui-primitives"]
+      "external": [
+        "react",
+        "react-dom",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
     }
   },
   "scripts": {
@@ -73,6 +81,7 @@
     "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
     "@types/node": "^24.0.0",
+    "@types/semver": "7.8.0",
     "jsdom": "^31.0.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
@@ -89,5 +98,9 @@
     "@deepseek-ai/dsh-tools": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "semver": "7.8.6",
+    "tar": "7.5.23"
   }
 }

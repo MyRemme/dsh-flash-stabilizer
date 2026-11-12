@@ -5,6 +5,7 @@ import { ProgressGuard } from './progress.js';
 import { MetricsStore, sessionKey, type DiagnosticEvent } from './metrics.js';
 import { RecoveryController } from './recovery.js';
 import { registerUI } from './ui-bridge.js';
+import { registerUpdater } from './updater.js';
 import type { Agent, Chunk, HostContext, Notice, RequestOptions, StepPayload, ToolExecution, ToolResult } from './types.js';
 
 export { Config };
@@ -273,7 +274,12 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     }),
   };
   ctx.provide?.('flashStabilizer', api);
-  registerUI(ctx, api);
+  const updates = registerUpdater(ctx, detected ?? '', () => {
+    const agents = ctx.agents?.list?.();
+    return !!agents && agents.every(agent => agent.status === 'idle' && !agent.inbox?.nextStep.length && !agent.inbox?.nextTurn.length)
+      && api.status().activeRequests === 0;
+  });
+  registerUI(ctx, api, updates);
   if (config.mode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过所选干预模式验证，已使用观察模式。' : 'Flash Stabilizer: selected intervention is not verified; using observation mode.');
   metrics.record({ kind: 'compatibility', session: '', score: 0, confirmed: false, chars: 0, action: compatibility.reason });
   try { ctx.logger?.info(`flash-stabilizer: DSH ${compatibility.version}; ${compatibility.adapter}; ${effectiveMode}; ${compatibility.reason}`); } catch { /* Optional logger. */ }

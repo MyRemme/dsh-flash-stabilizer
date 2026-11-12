@@ -14,7 +14,14 @@ const listing = (await exec('tar', ['-tzf', artifact], { windowsHide: true })).s
 assert.ok(listing.length > 0);
 assert.ok(listing.every(p => p.startsWith('package/') && !p.split('/').includes('..') && !p.includes('\\')), 'safe archive paths');
 for (const required of ['package/dist/index.js', 'package/client/client.js', 'package/cordis.patch.yml', 'package/README.md', 'package/compatibility/releases.json']) assert.ok(listing.includes(required), required);
-assert.ok(!listing.some(p => /(?:^|\/)(?:node_modules|\.npm-cache|\.compat-cache)(?:\/|$)/.test(p)), 'no development dependencies or caches');
+assert.ok(!listing.some(p => /(?:^|\/)(?:\.npm-cache|\.compat-cache)(?:\/|$)/.test(p)), 'no development caches');
+const runtimePackages = new Set(['semver', 'tar', 'chownr', 'minipass', 'minizlib', 'yallist', '@isaacs/fs-minipass']);
+for (const entry of listing.filter(path => path.startsWith('package/node_modules/'))) {
+  const path = entry.slice('package/node_modules/'.length).split('/');
+  const name = path[0].startsWith('@') ? path.slice(0, 2).join('/') : path[0];
+  assert.ok(runtimePackages.has(name), `Unexpected bundled dependency ${name}`);
+  assert.ok(!entry.slice('package/node_modules/'.length).includes('/node_modules/'), 'no unreviewed nested dependency');
+}
 const results = []; let cursor = 0;
 await Promise.all(Array.from({ length: 3 }, async () => {
   while (cursor < matrix.releases.length) {

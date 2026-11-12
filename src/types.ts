@@ -34,7 +34,7 @@ export interface HostContext {
   inject?(names: string[], callback: (ctx: HostContext & { connection?: ConnectionService }) => void): unknown;
   provide?(name: string, value: unknown): unknown;
   logger?: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
-  agents?: { get(id: string): Agent | undefined };
+  agents?: { get(id: string): Agent | undefined; list?(): Agent[] };
 }
 export interface ConnectionService {
   rpc: { handle(channel: string, handler: RpcHandler): unknown };
