@@ -1,4 +1,6 @@
-# DSH Flash Stabilizer 0.1.7
+# DSH Flash Stabilizer 0.1.8
+
+0.1.8 修复标准安装后插件迁入 pnpm 目录时，宿主元数据不可见导致防护降级的问题。版本识别使用 DSH 启动器提供的安装锚点，仍要求宿主包版本一致，配置提示不能解锁未知版本。网页自动化测试预先阻断音频及下载资源，避免唤起下载器；不修改日常浏览器或下载器设置。
 
 ## 0.1.7：仓库入口与自动更新
 
@@ -205,7 +207,7 @@ flowchart TD
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.7.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.8.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -291,7 +293,7 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.7.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.8.tgz
 ```
 
 `npm run check` 包含类型检查、构建及自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。

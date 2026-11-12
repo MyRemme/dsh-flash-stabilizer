@@ -47,7 +47,8 @@ interface SessionState {
 export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const config = resolveSettings(input);
   if (!config.enabled) return;
-  const detected = detectHostVersion();
+  const profile = ctx.get?.('profileContext') as { installAnchor?: string } | undefined;
+  const detected = detectHostVersion(profile?.installAnchor);
   const compatibility = compatibilityFor(config.hostVersion || detected || '');
   // Explicit version is an observation hint, never permission to unlock recovery.
   if (config.hostVersion && detected !== config.hostVersion) { compatibility.intervention = false; compatibility.guard = false; }

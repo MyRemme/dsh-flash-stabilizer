@@ -2,10 +2,26 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { defaults } from '../src/config.js';
 import { apply, type StabilizerAPI } from '../src/index.js';
-import { compatibilityFor, releases } from '../src/compatibility.js';
+import { compatibilityFor, releases, detectHostVersion } from '../src/compatibility.js';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { FakeHost, chunks, makeAgent, repeated, stream } from './helpers.js';
 import type { Chunk, RequestOptions, StepPayload } from '../src/types.js';
 const active: FakeHost[] = [];
+it('identifies the actual host from its launcher anchor after pnpm relocates the plugin', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'flash-host-metadata-'));
+  try {
+    const anchor = join(directory, 'package.json'); writeFileSync(anchor, '{}');
+    for (const name of ['dsh-agent', 'dsh-llm', 'dsh-tools']) {
+      const path = join(directory, 'node_modules/@deepseek-ai', name); mkdirSync(path, { recursive: true });
+      writeFileSync(join(path, 'package.json'), JSON.stringify({ version: '0.2.1-rc.2' }));
+    }
+    expect(detectHostVersion(anchor)).toBe('0.2.1-rc.2');
+    writeFileSync(join(directory, 'node_modules/@deepseek-ai/dsh-tools/package.json'), '{"version":"9.0.0"}');
+    expect(detectHostVersion(anchor)).toBeUndefined();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
 afterEach(async () => { for (const host of active.splice(0)) await host.close(); });
 describe.each(releases)('DSH $version contract replay', release => {
   it('selects a verified protocol path and preserves every chunk', async () => {
