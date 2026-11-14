@@ -6,6 +6,33 @@ import { FenceFilter } from '../src/fences.js';
 import { chunks, repeated } from './helpers.js';
 
 describe('repeat evidence', () => {
+  it.each([1, 73, 4096])('does not stop changing paths or checklists with many fixed conclusions (%i)', size => {
+    const names = Array.from({ length: 200 }, (_, i) => String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26));
+    for (const line of [(i: number) => `src/${names[i]}.ts。检查。通过。检查。通过。\n`,
+      (i: number) => `项目 ${i}。检查。通过。保留。无误。检查。通过。\n`,
+      (i: number) => `模块 ${names[i]}。检查。通过。保留。无误。检查。通过。\n`]) {
+      const events: { confirmed: boolean; uncertainty?: string }[] = [], monitor = new StreamMonitor(defaults, event => events.push(event));
+      chunks(names.map((_, i) => line(i)).join(''), size).slice(0, -2).forEach(chunk => monitor.push(chunk));
+      expect(events.some(event => event.uncertainty)).toBe(true);
+      expect(events.some(event => event.confirmed)).toBe(false);
+      monitor.push({ type: 'reasoning-delta', index: 0, text: '检查。继续。'.repeat(1000) });
+      expect(events.some(event => event.confirmed)).toBe(true);
+    }
+  });
+  it.each([1, 7, 73, 4096])('keeps changing names uncertain, then detects a subsequent real loop (%i)', size => {
+    const names = Array.from({ length: 200 }, (_, i) => String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26));
+    for (const name of [(i: number) => `模块 ${names[i]}`, (i: number) => `文件 ${names[i]}.ts`,
+      (i: number) => `组件${String.fromCodePoint(0x4e00 + i)}`]) {
+      const events: { confirmed: boolean; uncertainty?: string }[] = [];
+      const monitor = new StreamMonitor(defaults, e => events.push(e));
+      const checklist = names.map((_, i) => `${name(i)}。检查。通过。保留。\n`).join('');
+      chunks(checklist, size).slice(0, -2).forEach(chunk => monitor.push(chunk));
+      expect(events.some(e => e.uncertainty === 'changing-units')).toBe(true);
+      expect(events.some(e => e.confirmed)).toBe(false);
+      monitor.push({ type: 'reasoning-delta', index: 0, text: '继续。检查。'.repeat(1000) });
+      expect(events.some(e => e.confirmed && !e.uncertainty)).toBe(true);
+    }
+  });
   it.each([1, 73, 4096])('keeps changing numbered checklists uncertain and continues monitoring (%i)', size => {
     const events: { confirmed: boolean; uncertainty?: string; contentType: string }[] = [];
     const monitor = new StreamMonitor(defaults, e => events.push(e));
@@ -243,7 +270,7 @@ describe('repeat evidence', () => {
 });
 describe('configuration', () => {
   it('validates defaults using Standard Schema', () => expect(Config['~standard'].validate({})).toEqual({ value: defaults }));
-  it.each([{ mode: 'unsafe' }, { minChars: 0 }, { confirmations: 1 }, { maxRecoveries: 99 }, { models: [] as unknown as string, unknown: 2 }, { windowChars: 1e9 }])('rejects invalid configuration %j', config => {
+  it.each([{ mode: 'unsafe' }, { modelScope: 'auto' }, { modelSelections: [{ model: 'x', provider: '' }] }, { minChars: 0 }, { confirmations: 1 }, { maxRecoveries: 99 }, { models: [] as unknown as string, unknown: 2 }, { windowChars: 1e9 }])('rejects invalid configuration %j', config => {
     expect(() => resolveSettings(config)).toThrow();
   });
 });

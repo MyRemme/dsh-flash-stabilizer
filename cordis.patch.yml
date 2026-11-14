@@ -1,10 +1,6 @@
 - insert:
     - id: flash-stabilizer
-      name: ./dist/runtime-0.1.10.js
+      name: ./dist/runtime-0.1.13.js
       config:
         mode: observe
-        models:
-          - deepseek-flash
-          - deepseek-v4-flash
-          - deepseek-v4-flash-vision-exp
-          - deepseek-v4.1-flash
+        modelScope: all

@@ -1,6 +1,10 @@
+import { validateSelections, type ModelSelection } from './model-scope.js';
+
 export interface Settings {
   enabled: boolean;
   mode: 'observe' | 'assist' | 'guard' | 'auto';
+  modelScope: 'all' | 'selected';
+  modelSelections: ModelSelection[];
   models: string[];
   providers: string[];
   disabledSessions: string[];
@@ -20,7 +24,7 @@ export interface Settings {
   language: 'zh' | 'en';
 }
 export const defaults: Settings = {
-  enabled: true, mode: 'observe', models: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4.1-flash', 'deepseek-v4-flash-vision-exp'],
+  enabled: true, mode: 'observe', modelScope: 'all', modelSelections: [], models: [],
   providers: [], disabledSessions: [], windowChars: 4096, minChars: 1536, checkEveryChars: 256,
   minPeriod: 16, maxPeriod: 512, minRepeats: 6, confirmations: 3,
   toolRepeatLimit: 4, maxRecoveries: 2, maxSessions: 128,
@@ -31,6 +35,8 @@ export function resolveSettings(input: unknown = {}): Settings {
   const supplied = input as Record<string, unknown>;
   for (const key of Object.keys(supplied)) if (!Object.hasOwn(defaults, key)) throw new TypeError(`unknown config: ${key}`);
   const result = { ...defaults, ...supplied } as Settings;
+  if (!['all', 'selected'].includes(result.modelScope)) throw new TypeError('invalid model scope');
+  result.modelSelections = validateSelections(result.modelSelections);
   for (const key of ['models', 'providers', 'disabledSessions'] as const) {
     const value = result[key];
     if (!Array.isArray(value) || value.some(v => typeof v !== 'string' || !v.trim())) throw new TypeError(`${key}: expected non-empty strings`);

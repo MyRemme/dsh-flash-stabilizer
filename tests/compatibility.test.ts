@@ -70,7 +70,7 @@ it('source-only and core mock-provider tests do not unlock live automatic recove
   for (const release of releases) expect(compatibilityFor(release.version).intervention).toBe(false);
 });
 it('ignores auxiliary requests and other models', async () => {
-  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7', modelScope: 'selected', models: ['deepseek-flash'] });
   for (const override of [{ purpose: 'compaction' }, { model: 'other-model' }, { sessionId: 'other' }, { signal: new AbortController().signal }]) {
     await stream(host, makeAgent(), chunks(repeated), false, override);
   }
@@ -83,7 +83,7 @@ it.each(['deepseek-flash', 'fixture:deepseek-flash', 'fixture/nested/deepseek-fl
   expect(host.status().counts['stream-repeat']).toBeGreaterThanOrEqual(1);
 });
 it.each(['fixture:deepseek-flash-extra', 'fixture:some-deepseek-flash'])('does not match a partial Flash name %s', async model => {
-  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });
+  const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7', modelScope: 'selected', models: ['deepseek-flash'] });
   await stream(host, makeAgent(), chunks(repeated), false, { model });
   expect(host.status().counts['stream-repeat'] ?? 0).toBe(0);
 });
@@ -99,9 +99,10 @@ it('preserves upstream errors and downstream policy results', async () => {
   const failure = new Error('upstream failure');
   expect(() => host.waterfall('llm/stream', [{}], () => { throw failure; })).toThrow(failure);
 });
-it('keeps cordis.patch.yml models aligned with defaults.models', () => {
+it('installs with all-model monitoring by default', () => {
   const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
-  for (const model of defaults.models) expect(patch).toContain(`- ${model}`);
+  expect(defaults.modelScope).toBe('all'); expect(defaults.models).toEqual([]);
+  expect(patch).toContain('modelScope: all'); expect(patch).not.toContain('models:');
 });
 it('persists setSessionEnabled across pre-creation and agent instance recreation', async () => {
   const host = new FakeHost(); active.push(host); apply(host, { hostVersion: '0.1.0-rc.7' });

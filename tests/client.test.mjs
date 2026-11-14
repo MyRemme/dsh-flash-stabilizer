@@ -19,7 +19,7 @@ beforeEach(() => {
   cleanup = [];
 });
 afterEach(async () => { await act(async () => { root.unmount(); for (const fn of cleanup) fn(); }); dom.window.close(); vi.useRealTimers(); vi.unstubAllGlobals(); });
-async function mount(call, sessionId, services = {}) {
+async function mount(call, sessionId, services = {}, withPanel = false) {
   let plugin;
   const slots = [];
   const url = { createObjectURL: vi.fn(() => 'blob:diagnostic'), revokeObjectURL: vi.fn() };
@@ -42,11 +42,91 @@ async function mount(call, sessionId, services = {}) {
     const Panel = slots.find(s => s.meta.name === 'main').component;
     const Toast = slots.find(s => s.meta.name === 'shell.overlay').component;
     const Dock = slots.find(s => s.meta.name === 'conversation.composer.dock').component;
-    root.render(sessionId ? React.createElement(Dock, { sessionId }) : React.createElement(React.Fragment, null, React.createElement(Panel), React.createElement(Toast)));
+    root.render(sessionId && !withPanel ? React.createElement(Dock, { sessionId }) : React.createElement(React.Fragment, null, React.createElement(Panel), React.createElement(Toast), withPanel && React.createElement(Dock, { sessionId })));
   });
   return { slots, url, selectPanel };
 }
 const button = text => [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === text || b.textContent === text);
+it('defaults to all models and saves selected channel/model pairs while preserving choices', async () => {
+  let settings = { scope: 'all', selections: [], persistent: true, availableModels: [
+    { provider: 'route-a', model: 'vendor/deepseek-custom', label: 'DeepSeek 自定义', providerLabel: '渠道 A' },
+    { provider: 'route-b', model: 'vendor/deepseek-custom', label: 'DeepSeek 自定义', providerLabel: '渠道 B' },
+  ] };
+  const saves = [];
+  await mount(async (_channel, method, payload) => {
+    if (method === 'setModelScope') { saves.push(structuredClone(payload)); settings = { ...settings, ...structuredClone(payload) }; }
+    return { ok: true, value: ['modelScope', 'refreshModels', 'setModelScope'].includes(method) ? structuredClone(settings) : method === 'conversations' ? [] : baseline() };
+  });
+  expect(document.querySelector('input[value="all"]').checked).toBe(true);
+  expect(document.body.textContent).toContain('当前生效：全部模型（所有渠道）');
+  await act(async () => { document.querySelector('input[value="selected"]').click(); });
+  await act(async () => { document.querySelector('input[aria-label="渠道 B / vendor/deepseek-custom"]').click(); });
+  await act(async () => { button('保存监控范围').click(); });
+  expect(saves[0]).toEqual({ scope: 'selected', selections: [{ provider: 'route-b', model: 'vendor/deepseek-custom' }] });
+  expect(document.body.textContent).toContain('当前生效：仅选中的 1 个模型');
+  await act(async () => { document.querySelector('input[value="all"]').click(); });
+  await act(async () => { button('保存监控范围').click(); });
+  expect(settings.scope).toBe('all'); expect(settings.selections).toHaveLength(1);
+});
+it('keeps an unsaved model selection and reports a failed save', async () => {
+  const settings = { scope: 'all', selections: [], persistent: true, availableModels: [] };
+  await mount(async (_channel, method) => ({ ok: method !== 'setModelScope', value: ['modelScope', 'refreshModels'].includes(method) ? settings : method === 'conversations' ? [] : baseline() }));
+  await act(async () => { document.querySelector('input[value="selected"]').click(); });
+  expect(document.body.textContent).toContain('保存后将不监控任何模型');
+  await act(async () => { button('保存监控范围').click(); });
+  expect(document.body.textContent).toContain('范围保存失败');
+  expect(document.body.textContent).toContain('当前生效：全部模型');
+  expect(document.querySelector('input[value="selected"]').checked).toBe(true);
+});
+it.each(['response', 'error'])('keeps saved model scope when a stale poll finishes with %s and immediately resyncs', async outcome => {
+  let settings = { scope: 'all', selections: [], persistent: true, availableModels: [] };
+  const old = Promise.withResolvers(), fresh = Promise.withResolvers(); let polls = 0;
+  await mount(async (_channel, method, payload) => {
+    if (method === 'modelScope') {
+      if (++polls === 2) return old.promise;
+      if (polls > 2) return fresh.promise;
+    }
+    if (method === 'setModelScope') settings = { ...settings, ...structuredClone(payload) };
+    return { ok: true, value: ['modelScope', 'refreshModels', 'setModelScope'].includes(method) ? structuredClone(settings) : method === 'conversations' ? [] : baseline() };
+  });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  await act(async () => { document.querySelector('input[value="selected"]').click(); });
+  await act(async () => { button('保存监控范围').click(); });
+  await act(async () => {
+    if (outcome === 'response') old.resolve({ ok: true, value: { ...settings, scope: 'all' } });
+    else old.reject(Error('stale request failed'));
+  });
+  expect(document.body.textContent).toContain('当前生效：仅选中的 0 个模型');
+  expect(document.querySelector('input[value="selected"]').checked).toBe(true);
+  expect(document.body.textContent).not.toContain('监控范围未同步');
+  expect(polls).toBe(3);
+  await act(async () => { fresh.resolve({ ok: true, value: structuredClone(settings) }); });
+});
+it.each(['response', 'error'])('ignores a stale update poll %s after changing automatic updates', async outcome => {
+  const update = { currentVersion: '0.1.10', available: true, automatic: false, phase: 'available' };
+  const old = Promise.withResolvers(), fresh = Promise.withResolvers();
+  let polls = 0;
+  await mount(async (_channel, method, payload) => {
+    if (method === 'updates') {
+      if (++polls === 2) return old.promise;
+      if (polls > 2) return fresh.promise;
+      return { ok: true, value: { ...update } };
+    }
+    if (method === 'setAutomaticUpdates') { update.automatic = payload.enabled; return { ok: true, value: { ...update } }; }
+    return { ok: true, value: method === 'conversations' ? [] : baseline() };
+  });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  await act(async () => { button('自动更新').click(); });
+  expect(button('自动更新').getAttribute('aria-checked')).toBe('true');
+  await act(async () => {
+    if (outcome === 'response') old.resolve({ ok: true, value: { ...update, automatic: false, phase: 'idle' } });
+    else old.reject(Error('stale request failed'));
+  });
+  expect(button('自动更新').getAttribute('aria-checked')).toBe('true');
+  expect(document.body.textContent).not.toContain('更新服务未连接');
+  expect(polls).toBe(3);
+  await act(async () => { fresh.resolve({ ok: true, value: { ...update } }); });
+});
 it('links to the repository and exposes persistent automatic and manual update controls', async () => {
   const update = { repository: 'https://github.com/MyRemme/dsh-flash-stabilizer', currentVersion: '0.1.7', latestVersion: '0.1.8', available: true, automatic: false, phase: 'available' };
   const call = vi.fn(async (_channel, method, payload) => {
@@ -127,6 +207,7 @@ it.each([
   [{ risk: 'clear', active: true, reasoningChars: 4000, textChars: 0, checks: 3, silentForMs: 31000 }, '等待输出 · 尚不能判断'],
   [{ risk: 'collecting', active: false, reasoningChars: 15, textChars: 0, checks: 0, silentForMs: 0 }, '请求结束 · 检测样本不足'],
   [{ risk: 'incomplete', incomplete: true, active: true, reasoningChars: 0, textChars: 0, checks: 0, silentForMs: 0 }, '检测不完整 · 内容块超限'],
+  [{ risk: 'incomplete', incomplete: true, incompleteReason: 'fence-limit', active: true, reasoningChars: 70000, textChars: 0, checks: 0, silentForMs: 0 }, '检测不完整 · 围栏候选行超限'],
   [{ risk: 'confirmed', incomplete: true, incompleteReason: 'monitor-error', active: true, reasoningChars: 4000, textChars: 0, checks: 3, silentForMs: 0 }, '检测异常 · 仅传递输出'],
 ])('labels incomplete observations honestly: %s', async (live, label) => {
   await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? { ...sessionData(), coverage: live.active ? 'monitoring' : 'checked', live } : baseline() }), 'a');
@@ -195,6 +276,28 @@ it('rejects a stale polling response after pause so the screen stays paused', as
   await act(async () => { resolve({ ok: true, value: baseline() }); });
   expect(document.body.textContent).toContain('监控已暂停');
 });
+it.each(['snapshot', 'conversations', 'session'].flatMap(endpoint => ['response', 'error'].map(outcome => [endpoint, outcome])))('resyncs %s immediately after a stale %s without waiting for the polling timer', async (endpoint, outcome) => {
+  const old = Promise.withResolvers(), fresh = Promise.withResolvers(); let polls = 0, monitoring = true;
+  const value = method => method === 'conversations' ? [{ ...sessionData(), coverage: monitoring ? 'checked' : 'paused', sessionId: 'a', sessionKey: 'key-a', tracked: true }]
+    : method === 'session' ? { ...sessionData(), coverage: monitoring ? 'checked' : 'paused' } : { ...baseline(), monitoring };
+  await mount(async (_channel, method, payload) => {
+    if (method === endpoint) {
+      if (++polls === 2) return old.promise;
+      if (polls > 2) return fresh.promise;
+    }
+    if (method === 'setMonitoring') monitoring = payload.enabled;
+    return { ok: true, value: value(method) };
+  }, 'a', {}, true);
+  const stale = structuredClone(value(endpoint));
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  await act(async () => { button('启用监控').click(); });
+  await act(async () => { if (outcome === 'response') old.resolve({ ok: true, value: stale }); else old.reject(Error('late failure')); });
+  expect(polls).toBe(3);
+  await act(async () => { fresh.resolve({ ok: true, value: value(endpoint) }); });
+  expect(button('启用监控').getAttribute('aria-checked')).toBe('false');
+  expect(document.querySelector('.fs-dock-button').textContent).toContain('监控已暂停');
+  expect(document.body.textContent).not.toMatch(/监控服务未连接|会话监控未连接|对话列表未连接/);
+});
 const sessionData = () => ({ monitoring: true, mode: 'observe', coverage: 'checked', monitoredRequests: 2,
   activeRequests: 0, confirmed: 0, toolWarnings: 0, recoverySubmitted: 0, cancelRequested: 0, lastMonitoredAt: null, latestEvent: null, events: [] });
 it('shows a scoped status in each conversation and explains evidence without claiming interception', async () => {
@@ -219,7 +322,7 @@ it('shows a scoped status in each conversation and explains evidence without cla
   expect(call).toHaveBeenCalledWith('/flash-stabilizer', 'session', { sessionId: 'b' }, expect.any(AbortSignal));
 });
 it.each([
-  ['waiting', '待下次 Flash 请求'], ['monitoring', '正在监控'], ['other-model', '当前模型不在监控范围'],
+  ['waiting', '待下次模型请求'], ['monitoring', '正在监控'], ['other-model', '当前模型不在监控范围'],
   ['paused', '监控已暂停'], ['disabled', '此对话未启用'], ['auxiliary', '辅助请求未监控'],
   ['unavailable', '检测不完整 · 待下次请求'],
 ])('does not imply successful monitoring for %s', async (coverage, label) => {
@@ -252,14 +355,31 @@ it('explains intermittent phrase evidence and distinguishes requested from confi
   data.latestEvent = { kind: 'recovery', action: 'stop-confirmed' };
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   expect(document.querySelector('.fs-dock-button').textContent).toContain('已停止重复生成');
+  expect(document.querySelector('[role="dialog"]').textContent).toContain('宿主已确认停止');
+  expect(document.querySelector('[role="dialog"]').textContent).not.toContain('需以宿主结果为准');
 });
-it('notifies uncertain repetition without claiming a confirmed loop or interruption', async () => {
-  const event = { kind: 'stream-repeat', method: 'phrase', uncertainty: 'changing-numbered-units', action: 'notify-only', contentType: 'reasoning', confirmed: false, repeats: 90, time: '2026-11-12T12:00:00Z' };
+it.each([
+  ['observe', { kind: 'stream-repeat', confirmed: true }, '确认重复 · 请求已结束'],
+  ['assist', { kind: 'recovery', action: 'correction-revoked' }, '已撤销纠正'],
+])('retains the actual conclusion after an interrupted confirmed %s request', async (mode, latestEvent, label) => {
+  const data = { ...sessionData(), mode, coverage: 'unavailable', latestEvent, live: { risk: 'confirmed', active: false } };
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? data : baseline() }), 'a');
+  expect(document.querySelector('.fs-dock-button').textContent).toContain(label);
+  expect(document.querySelector('.fs-dock-button').textContent).not.toContain('检测不完整');
+});
+it('keeps a monitor failure visible even when an earlier recovery event is retained', async () => {
+  const data = { ...sessionData(), coverage: 'unavailable', latestEvent: { kind: 'recovery', action: 'correction-revoked' }, live: { risk: 'confirmed', incomplete: true, incompleteReason: 'monitor-error' } };
+  await mount(async (_channel, method) => ({ ok: true, value: method === 'session' ? data : baseline() }), 'a');
+  expect(document.querySelector('.fs-dock-button').textContent).toContain('检测异常');
+});
+it.each(['changing-numbered-units', 'changing-units'])('notifies %s without claiming a confirmed loop or interruption', async uncertainty => {
+  const event = { kind: 'stream-repeat', method: 'phrase', uncertainty, action: 'notify-only', contentType: 'reasoning', confirmed: false, repeats: 90, time: '2026-11-12T12:00:00Z' };
   const data = { ...baseline(), mode: 'guard', events: [event] };
   await mount(async (_channel, method) => ({ ok: true, value: method === 'conversations' ? [] : data }));
   expect(document.querySelector('[role="alert"]').textContent).toContain('重复特征待确认');
   expect(document.querySelector('[role="alert"]').textContent).toContain('未自动停止或提交纠正');
   expect(document.querySelector('.fs-event-title').textContent).toBe('重复特征待确认');
+  expect(document.body.textContent).toContain(uncertainty === 'changing-units' ? '对象或内容仍在变化' : '变化编号');
 });
 it('shows the current request while keeping earlier incidents in conversation details', async () => {
   const data = { ...sessionData(), coverage: 'monitoring', confirmed: 1,

@@ -7,7 +7,8 @@ const report = {
   auditedAt: matrix.checkedAt, auditedReleases: matrix.releases.length,
   hostTestsPassed: matrix.releases.filter(r => r.hostTest === 'passed').length,
   unavailableHostPackages: matrix.releases.filter(r => r.hostTest === 'unavailable').map(r => r.version),
-  defaultMode: 'observe', availableModes: ['observe', 'assist'], automaticInterventionEnabled: false,
+  defaultMode: 'observe', availableModes: ['observe', 'assist', 'guard'], automaticInterventionEnabled: false,
+  defaultModelScope: 'all', availableModelScopes: ['all', 'selected'],
   note: 'Offline package check. Live plugin status is available from ctx.flashStabilizer.status(). No credentials or conversations are read.',
 };
 console.log(JSON.stringify(report, null, 2));

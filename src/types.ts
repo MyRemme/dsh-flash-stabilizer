@@ -35,6 +35,7 @@ export interface HostContext {
   provide?(name: string, value: unknown): unknown;
   logger?: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
   agents?: { get(id: string): Agent | undefined; list?(): Agent[] };
+  llm?: unknown;
 }
 export interface ConnectionService {
   rpc: { handle(channel: string, handler: RpcHandler): unknown };
@@ -48,5 +49,5 @@ export interface Notice {
   contentType?: 'reasoning' | 'text'; turn?: number; step?: number;
   coverage?: number; novelty?: number;
   method?: 'periodic' | 'phrase';
-  uncertainty?: 'changing-numbered-units';
+  uncertainty?: 'changing-numbered-units' | 'changing-units';
 }

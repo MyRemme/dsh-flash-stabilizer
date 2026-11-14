@@ -1,12 +1,18 @@
-# DSH Flash Stabilizer 0.1.10
+# DSH Flash Stabilizer 0.1.13
 
 **面向 DeepSeek-V4.1-Flash 的 DeepSeek Harness（DSH）防空转插件。** 针对长上下文、高推理努力下，推理反复出现“好。执行。好。”或“Write. / Output. / Let me write.”、没有正文或工具进展的现象，提供实时检测、对话告警和可选的本轮防护停止。不是模型权重或服务端采样器补丁。
 
-默认安装模式为 `observe`（只告警）；需要自动请求停止已确认的推理循环时配置 `guard`。模型匹配依据实际请求标识，官方 API 名使用 `deepseek-flash`；`deepseek-v4.1-flash` 等为兼容别名。目标型号与匹配名称不等于每次测试都验证了服务端权重版本。
+默认安装模式为 `observe`（只告警），**默认监控所有渠道、所有模型**，包括第三方渠道的自定义 DeepSeek 名称。可在「Flash 防空转 → 监控范围」切换「全部模型／仅选中的模型」，勾选后保存。需要自动请求停止已确认的推理循环时配置 `guard`；检测规则源自 Flash 重复输出场景，不代表已验证所有模型的真实效果。
 
 仓库和 [Releases](https://github.com/MyRemme/dsh-flash-stabilizer/releases) 现已公开，可以直接查看源码、中文发布说明和下载安装包，无需申请仓库访问权限。
 
 **0.1.10 修复：** 补齐持续“好。”等单字推理短句漏检，监控异常会在对应对话提示，不再只记全局计数。公开仓库更新已改为完全匿名请求，保留自动更新和安装校验。[中文发布说明](releases/0.1.10.zh-CN.md)与[修复验证](evaluations/2026-11-13-detector-fix/REPORT.zh-CN.md)区分了合成盲点和原始样本：评审提及的“好。”17,233 次混合短句记录，旧版已经能够检出。
+
+**0.1.11 修复：** 持续更换模块名、文件名或中文对象名称的清单保持为不确定性通知，避免被当作空转自动停止；关闭自动更新会撤销尚未交给宿主的自动安装；更新面板忽略操作前发起的旧轮询结果及错误。详见[中文发布说明](releases/0.1.11.zh-CN.md)。
+
+**0.1.12：** 新增模型监控范围选择与本地保存，取消固定 Flash 别名白名单。选中模式按实际渠道和完整模型标识匹配，同名模型可分别控制；原有「启用监控」总开关保留。详见[中文发布说明](releases/0.1.12.zh-CN.md)和[模型范围验证报告](evaluations/2026-11-14-model-scope/REPORT.zh-CN.md)。
+
+**0.1.13 审查修复：** 修复围栏边界丢字和漏检、路径与多结论清单误停、手动安装排队被自动检查覆盖、等待空闲状态未落盘和重复下载、停止后结论被掩盖、事件动作与错误归属失真、旧请求帧标识复用。保留默认全部模型及选中模型监控。详见[逐项修复说明](releases/0.1.13.zh-CN.md)与[完整审查验证](evaluations/2026-11-14-review-completion/REPORT.zh-CN.md)。
 
 ## 实测与验证报告
 
@@ -30,6 +36,10 @@
 插件页新增可点击的 [GitHub 仓库](https://github.com/MyRemme/dsh-flash-stabilizer) 入口，以及「插件更新」区域：当前版本、最新正式版、最近检查、更新状态、自动更新开关、检查与安装按钮。公开仓库和 Release 可直接访问。
 
 自动更新默认关闭，开启后在启动时及每 6 小时检查仓库的最新正式 Release；也可手动检查与安装。更新设置保存在当前 profile 的 `.flash-stabilizer/updates/state.json`，不随插件重载丢失。只接受递增的正式版本，跳过草稿、预发布和降级。下载包保存在同目录，方便核查和手动恢复。
+
+关闭自动更新会撤销等待中或下载、校验中的自动安装；已交给 DSH 的安装继续完成。手动点击安装产生的任务不受自动更新开关影响。快速关闭再开启也不会恢复旧下载任务，而是在下一次检查中创建新任务。
+
+排队中的手动安装固定用户已选择的版本，期间不重新查询 Release 来替换或清空该任务。下载后发现宿主忙碌，会保存「等待空闲」状态；同一任务恢复时复用本次运行内已验证的安装包，并重新核对文件摘要、大小和归档内容。取消自动任务尚未清理完时提交的手动重试也会保留。自动更新偏好和安装结果跨重启保存，等待任务本身不承诺跨重启续接。
 
 更新请求固定访问此仓库的 GitHub API。自 0.1.10 起，检查和下载均匿名，不读取环境 Token 或系统 Git 凭据，不弹出登录。GitHub API 的匿名速率限制仍适用；访问失败不影响推理监控，面板会提示重试。开发发布脚本单独读取发布凭据，与安装后的更新模块分离。
 
@@ -92,7 +102,7 @@ DeepSeek Harness 原生 Cordis 插件，主要针对 DeepSeek-V4.1-Flash，监�
 
 ### 精确周期分支
 
-1. 从 DSH 的统一输出流中读取推理和正文，按会话、请求尝试和内容块分别观察；工具参数不参与文本检测，Markdown 代码围栏内的内容被跳过。
+1. 从 DSH 的统一输出流中读取推理和正文，按会话、请求尝试和内容块分别观察；工具参数不参与文本检测，Markdown 代码围栏内的内容被跳过。围栏边界先送检待处理的文本，并保留同一内容块内的围栏外检测历史；行首行内反引号和非法 info 字符串按普通文本处理。未能确定合法性的围栏候选行最多缓存 65,536 字符，超限时显示检测不完整并继续传递原始输出。
 2. 每个内容块保留最近 4096 个字符，累计至少 1536 个字符后开始检查；两次检查之间至少有 256 个新字符。这里是 JavaScript 字符串长度单位，不是模型 token 数，也不是计时器。
 3. 在窗口末尾寻找精确的周期重复：默认候选周期为 16–512 个字符，至少重复 6 次。更短的短句可通过周期的整数倍命中；周期长度不一定等于自然语言的一句话。
 4. 确认还要求重复片段覆盖窗口至少 85%，最近 1024 个字符的相邻四字符片段中新增片段比例不高于 15%，并在周期兼容的连续 3 次检查中成立。第一次检查尚无前窗参照，不能直接以“低新颖度”确认。
@@ -181,7 +191,7 @@ flowchart TD
 - 流式检测确定性周期重复，包括“好。执行。好。”一类短句轮转；按会话、模型请求和内容块隔离，连续多次观测后确认。
 - 同次请求确认重复后释放该内容类型的检测窗口，另一种类型仍继续扫描；仍原样转发全部输出。重叠流分别绑定请求状态，旧流结束不会清除新流监控。
 - 排除工具参数 JSON，跳过 Markdown 代码围栏，降低重复模板代码的敏感度。
-- 对五分钟内相同工具、相同参数且结果不变的重复执行告警。结果变化会重置该指纹的计数。
+- 对五分钟内相同工具、相同参数且结果不变的重复执行告警。结果变化会重置该指纹的计数。超出 20,000 节点或 32 层深度的参数/结果跳过本次比较，并断开对应的重复计数；未知调用标识时清空近期比较记录。真正的比较异常仍按会话与步骤报告，不记录异常正文。
 - `observe` 默认只告警；`assist` 在确认重复后等待当前回合正常结束或耗尽输出，再通过宿主 `agent.followup()` 开启独立纠正回合，每个用户任务最多两次。错误、用户停止、新用户输入、禁用会话或卸载会取消待执行的纠正，不向当前步骤注入消息。
 - 提供原生「Flash 防空转」侧栏、插件详情面板和重复告警提示，显示监控请求数、最近监控时间、检测记录及实际纠正动作。
 - 面板复用 DSH 原生按钮、开关、图标及明暗主题；每个对话的输入框下方显示独立监控状态，点击可查看该对话的重复原因、轮次、步骤和实际动作。
@@ -208,7 +218,9 @@ flowchart TD
 
 在侧栏打开 **Flash 防空转**，或进入 **插件 → dsh-flash-stabilizer → 配置**。新增前端模块后可能需要刷新 Harness 页面。
 
-- 「监控在线」表示服务已连接并启用；「已监控请求」及「最近监控请求」在实际匹配的 Flash 请求开始消费时更新。
+- 「监控在线」表示服务已连接并启用；「已监控请求」及「最近监控请求」在属于当前监控范围的模型请求开始消费时更新。
+- 「监控范围」默认选择全部模型。切换为仅选中的模型后，可搜索并勾选渠道和模型，再点击「保存监控范围」。模型列表来自宿主目录及本次运行已使用的模型，也保留已保存的选择；可以手动刷新列表。未勾选任何模型时，选中模式不监控任何模型。
+- 范围保存在当前 profile 的 `.flash-stabilizer/model-scope.json`，重启后恢复，优先于启动配置中的范围。没有 profile 存储的旧宿主明确显示仅本次运行生效。保存失败时原范围继续生效，不显示保存成功。取消选择立即停止跟踪并撤销待执行纠正；新加入模型从下一次请求开始监控，不取消或重放原请求。
 - 对话输入框下方的「Flash」状态分别显示待请求、监控中、最近请求未发现重复、模型不匹配、暂停或检测不完整。当前请求状态与历史告警分开；历史重复不会覆盖新请求的状态。
 - 点击对话状态可查看周期长度、重复次数、推理或正文类型以及轮次与步骤。观察模式明确显示「仅告警，未拦截、未中断输出」；待纠正、纠正已提交及请求中断分别记录，不代表恢复或中断成功。
 - 插件完整页面的「对话实时监控」列出对话名称及匿名短标识、当前轮次/步骤、推理与正文字数、检测次数、工具结果数和最近输出/检查时间。每 2 秒同步；可按对话筛选事件并用「打开对话」返回 DSH 原生对话。只有已跟踪的会话或仍保留事件的会话会出现，不能补看安装前的全部历史。
@@ -230,7 +242,7 @@ flowchart TD
 先确认 `dsh` CLI 可用，并确定你实际使用的 profile 名称。下面以 `desktop` 为例；其他 profile 请替换两条命令中的 `desktop`。安装到哪个 profile，就只在该 profile 中生效。
 
 ```powershell
-dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.10.tgz
+dsh plugin --profile desktop add ./artifacts/dsh-flash-stabilizer-0.1.13.tgz
 dsh --profile desktop --dump-config
 ```
 
@@ -250,23 +262,24 @@ dsh plugin --profile desktop remove dsh-flash-stabilizer
 - id: flash-stabilizer
   config:
     mode: assist
-    models: [deepseek-flash, deepseek-v4-flash, deepseek-v4.1-flash, deepseek-v4-flash-vision-exp]
+    modelScope: all
     maxRecoveries: 2
     logDir: './dsh-logs/flash-stabilizer'
 ```
 
 该 patch 替换此行的整个 config；未写字段由插件默认值补齐。更高优先级的 home patch 或 `--patch` 仍可覆盖它。修改后按宿主支持的方式重新加载配置或重启。
 
-模型匹配使用 DSH 请求中的**模型标识**，不使用界面显示名称。可精确匹配整个标识，或匹配 `/`、`:` 分隔后的末段。官方 API 模型名为 `deepseek-flash`；其余默认值是兼容别名，不代表模型测试实际使用的名称或版本。文档不公布本地路由前缀，模拟测试只使用虚构命名空间。`providers` 为空表示不限制提供方；不会观察压缩等带 `purpose` 的辅助请求。
+`modelScope: all` 不使用模型或渠道白名单。`modelScope: selected` 使用 `modelSelections` 中的 `{ provider, model }` 精确匹配实际渠道和完整模型标识，不拆分 `/`、`:`，也不以显示名称推测是否为 DeepSeek。旧的 `models` / `providers` 数组仅作为没有 `modelSelections` 时的初始选择；需要显式设置 `modelScope: selected` 才会筛选。压缩等带 `purpose` 的辅助请求仍不监控。
 
-如果 DSH 使用自定义短标识，将该标识追加到**本机** `models` 数组；不要据名称猜测提供方或把私人路由写入共享仓库。开启防护停止时使用 `mode: guard`，模式只停止本轮，不消耗 `maxRecoveries` 追加预算；每个独立请求最多报告和请求一次停止。
+例如只监控一个虚构渠道的模型，可配置 `modelScope: selected` 和 `modelSelections: [{ provider: example-channel, model: vendor/deepseek-custom }]`。也可省略 `provider`，表示任意渠道下完整模型标识相同的模型；界面勾选会保存明确的渠道。实际路由只在本机设置，不写入共享仓库。开启防护停止时使用 `mode: guard`，模式只停止本轮，不消耗 `maxRecoveries` 追加预算。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|
 | `enabled` | `true` | 总开关，设为 false 后不注册监听 |
 | `mode` | `observe` | `observe` / `assist` / `guard`；`auto` 在本版降级 |
-| `models` | 上例四个别名 | 精确匹配完整标识或路由末段 |
-| `providers` | `[]` | 可选的提供方标识限制 |
+| `modelScope` | `all` | `all` 全部模型，或 `selected` 仅选中的模型 |
+| `modelSelections` | `[]` | 最多 512 条 `{ provider?, model }`；按完整标识匹配 |
+| `models` / `providers` | `[]` | 兼容的初始选择配置，仅在 selected 模式且 modelSelections 为空时使用 |
 | `disabledSessions` | `[]` | 不启用监控的会话 ID |
 | `windowChars` | `4096` | 每个内容块的检测窗口，最多 16384 字符 |
 | `minChars` | `1536` | 精确周期分支的开始字符数；推理短句分支从 512 字符起 |
@@ -280,7 +293,7 @@ dsh plugin --profile desktop remove dsh-flash-stabilizer
 | `logDir` | 空字符串 | 默认不写日志；设置目录后开启 |
 | `maxLogBytes` | `2097152` | 每个日志文件的上限；允许 4096–16777216 字节 |
 | `hostVersion` | 空字符串 | 仅在元数据不可见时提供版本提示，不能解锁自动干预 |
-| `language` | `zh` | 提示语言 `zh` / `en` |
+| `language` | `zh` | 后端日志及纠正消息语言 `zh` / `en`，当前面板为中文 |
 
 窗口要求 `512 <= minChars <= windowChars`；重复周期要求 `8 <= minPeriod <= maxPeriod <= 1024`，且 `maxPeriod * minRepeats <= windowChars`。不符合约束的配置会拒绝加载。
 
@@ -316,7 +329,7 @@ npm run test:versions
 npm run matrix
 npm run diagnose
 npm pack --pack-destination artifacts --cache .npm-cache
-node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.10.tgz
+node scripts/test-package.mjs artifacts/dsh-flash-stabilizer-0.1.13.tgz
 ```
 
 `npm run check` 包含类型检查、构建及自动化测试，包含真实 React / DOM 中的面板与会话交互、会话数据隔离及 Cordis 作用域中的路由注册和卸载。`test:versions` 从 npm 为各版本创建隔离宿主（需要网络），将整套 DSH 依赖固定到所测发行版；缺少发布包的版本记为 unavailable。`test-package.mjs` 复用这些宿主，解压交付包并验证包内代码、实际宿主版本识别、两种流适配、独立纠正回合上限、耗尽输出后的工具结果续接、用户停止和卸载。

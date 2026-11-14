@@ -13,7 +13,7 @@ function setup() {
     if (names.includes('pluginManager')) return;
     expect(names).toEqual(['connection', 'webServer']); callback(Object.assign(host, { connection }));
   };
-  apply(host, { hostVersion: '0.1.0-rc.7', mode: 'assist' });
+  apply(host, { hostVersion: '0.1.0-rc.7', mode: 'assist', modelScope: 'selected', models: ['deepseek-flash'] });
   const api = host.values.get('flashStabilizer') as StabilizerAPI;
   const call = (endpoint: string, payload: unknown = {}, kind = 'owner', signal = new AbortController().signal) =>
     handler(endpoint, payload, signal, { principal: { kind } }) as { ok: boolean; value?: any; error?: { code: string } };
@@ -32,6 +32,21 @@ it('requires an owner and validates every UI operation before changing state', (
   expect(call('updates').value.phase).toBe('unavailable');
   expect(call('setMonitoring', { enabled: false }, 'owner', AbortSignal.abort()).error?.code).toBe('ABORTED');
   expect(call('setMonitoring', { enabled: false }).value.monitoring).toBe(false);
+});
+it('restricts model selection to the owner and omits route names from exports', async () => {
+  const { api, call } = setup();
+  expect(call('modelScope', {}, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('refreshModels', {}, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('setModelScope', { scope: 'all', selections: [] }, 'guest').error?.code).toBe('FORBIDDEN');
+  for (const payload of [{}, { scope: 'some', selections: [] }, { scope: 'all', selections: ['model'] },
+    { scope: 'selected', selections: [], extra: true }]) expect(call('setModelScope', payload).error?.code).toBe('BAD_REQUEST');
+  expect(call('setModelScope', { scope: 'all', selections: [] }, 'owner', AbortSignal.abort()).error?.code).toBe('ABORTED');
+  const selection = { provider: 'private-fixture-channel', model: 'private-fixture-model' };
+  expect((await call('setModelScope', { scope: 'selected', selections: [selection] })).ok).toBe(true);
+  expect(api.modelScope().selections).toEqual([selection]);
+  expect(call('modelScope').value.selections).toEqual([selection]);
+  expect(JSON.stringify(call('export'))).not.toContain(selection.provider);
+  expect(JSON.stringify(call('snapshot'))).not.toContain(selection.model);
 });
 it('limits raw conversation navigation ids to the owner UI endpoint and keeps export redacted', async () => {
   const { host, call } = setup();

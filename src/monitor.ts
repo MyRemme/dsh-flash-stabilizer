@@ -22,6 +22,7 @@ export class StreamMonitor {
   private closed = new Set<number>();
   private incomplete = false;
   private monitorError = false;
+  private fenceLimit = false;
   private lastOutputAt: string | null = null;
   private lastCheckAt: string | null = null;
   private evidence: (RepeatEvidence & { contentType: 'reasoning' | 'text' }) | null = null;
@@ -29,7 +30,7 @@ export class StreamMonitor {
     return { reasoningChars: this.reasoningChars, textChars: this.textChars, analyzedChars: this.analyzedChars, checks: this.checks,
       lastOutputAt: this.lastOutputAt, lastCheckAt: this.lastCheckAt,
       incomplete: this.incomplete,
-      incompleteReason: this.monitorError ? 'monitor-error' as const : this.incomplete ? 'capacity' as const : null,
+      incompleteReason: this.monitorError ? 'monitor-error' as const : this.fenceLimit ? 'fence-limit' as const : this.incomplete ? 'capacity' as const : null,
       risk: this.reported.size ? 'confirmed' as const : this.evidence && this.evidence.score >= 70 ? 'suspected' as const : this.incomplete ? 'incomplete' as const : this.checks ? 'clear' as const : 'collecting' as const,
       evidence: this.evidence ? { ...this.evidence } : null };
   }
@@ -44,7 +45,7 @@ export class StreamMonitor {
       this.outputBlocks.delete(chunk.index!);
     }
     if (chunk.type === 'finish') { this.blocks.clear(); return; }
-    if (this.monitorError) return;
+    if (this.monitorError || this.fenceLimit) return;
     if (!['block-start', 'reasoning-delta', 'text-delta', 'block-end'].includes(chunk.type) || !Number.isSafeInteger(chunk.index)) return;
     const index = chunk.index!;
     let block = this.blocks.get(index);
@@ -54,7 +55,7 @@ export class StreamMonitor {
       if (this.blocks.size >= 32 || this.incomplete) { this.incomplete = true; return; }
       block = {
         detector: new RepeatDetector(this.config, type === 'reasoning'), type,
-        filter: new FenceFilter(), closed: false, seen: false,
+        filter: new FenceFilter(() => { this.fenceLimit = true; this.incomplete = true; }), closed: false, seen: false,
       };
       this.blocks.set(index, block);
     }
@@ -94,11 +95,12 @@ export class StreamMonitor {
   }
   private feed(block: BlockState, text: string): void {
     let plain = '';
-    const flush = () => { if (plain) this.inspect(block, plain); plain = ''; return !this.reported.has(block.type); };
+    const interval = block.type === 'reasoning' ? Math.min(128, this.config.checkEveryChars) : this.config.checkEveryChars;
+    const flush = () => { if (plain && !this.fenceLimit) this.inspect(block, plain); plain = ''; return !this.reported.has(block.type) && !this.fenceLimit; };
     block.filter.push(text, segment => {
       plain += segment;
-      if (plain.length >= this.config.checkEveryChars) return flush();
-    }, () => { plain = ''; block.detector = new RepeatDetector(this.config, block.type === 'reasoning'); });
+      if (plain.length >= interval) return flush();
+    }, flush); // Code is excluded; retain evidence from prose in this same block.
     flush();
   }
   private inspect(block: BlockState, text: string): void {

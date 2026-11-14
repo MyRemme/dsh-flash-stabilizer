@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, mkdir, rename, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, rename, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { valid, gt, satisfies } from 'semver';
@@ -30,6 +30,8 @@ export interface Manager {
 }
 interface Asset { id: number; name: string; size: number; digest?: string }
 interface Candidate { version: string; asset: Asset; checksum: Asset | undefined }
+type InstallSource = 'manual' | 'automatic';
+interface InstallTask { source: InstallSource; abort: AbortController; submitted: boolean }
 class UpdateFailure extends Error {}
 const failure = (code: string): never => { throw new UpdateFailure(code); };
 
@@ -76,9 +78,10 @@ export async function validateArchive(file: string, version: string, hostVersion
 export class Updater implements UpdateAPI {
   private state: UpdateStatus;
   private candidate: Candidate | null = null;
-  private pending = false;
+  private prepared: { candidate: Candidate; file: string; hash: string } | null = null;
+  private pending: InstallSource | null = null;
   private work: Promise<UpdateStatus> | null = null;
-  private installing = false;
+  private installing: InstallTask | null = null;
   private disposed = false;
   private abort = new AbortController();
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -105,7 +108,7 @@ export class Updater implements UpdateAPI {
     } catch { /* First installation or invalid state starts with automatic updates off. */ }
     if (this.disposed || this.options.schedule === false) return;
     this.timer = setInterval(() => {
-      if (this.pending && this.options.idle()) this.install();
+      if (this.pending && this.options.idle()) this.startInstall(this.pending);
       else if (this.state.automatic && this.state.phase !== 'restart-required' && Date.now() >= this.nextCheck && !this.work && !this.installing) {
         void this.check();
       }
@@ -125,15 +128,25 @@ export class Updater implements UpdateAPI {
   }
   async setAutomatic(enabled: boolean): Promise<UpdateStatus> {
     this.state.automatic = enabled;
-    if (!enabled) this.pending = false;
-    if (!enabled && this.state.phase === 'waiting-idle') this.state.phase = 'available';
-    try { await this.save(); } catch { this.state.automatic = false; this.state.phase = 'error'; this.state.error = 'storage-failed'; }
+    if (!enabled) this.revokeAutomatic();
+    // If a cancelled task is still unwinding, enabling again schedules a fresh
+    // check on the next tick rather than reviving the cancelled task.
+    if (enabled) this.nextCheck = Date.now();
+    try { await this.save(); } catch { this.state.automatic = false; this.revokeAutomatic(); this.state.phase = 'error'; this.state.error = 'storage-failed'; }
     if (enabled && this.state.automatic) void this.check();
     return this.status();
   }
-  private async request(path: string, limit: number, binary = false): Promise<Buffer> {
+  private revokeAutomatic(): void {
+    if (this.pending === 'automatic') {
+      this.pending = null;
+      if (this.state.phase === 'waiting-idle') this.state.phase = 'available';
+    }
+    if (this.installing?.source === 'automatic' && !this.installing.submitted) this.installing.abort.abort();
+  }
+  private async request(path: string, limit: number, binary = false, cancellation?: AbortSignal): Promise<Buffer> {
     const transport = this.options.fetch ?? fetch;
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(30000)]);
+    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(30000), ...(cancellation ? [cancellation] : [])]);
+    signal.throwIfAborted();
     const response = await transport(API + path, { redirect: 'manual', signal, headers: {
       Accept: binary ? 'application/octet-stream' : 'application/vnd.github+json', 'User-Agent': manifest.name,
       'X-GitHub-Api-Version': '2022-11-28',
@@ -152,7 +165,8 @@ export class Updater implements UpdateAPI {
     const reader = result.body.getReader();
     try {
       for (;;) {
-        const chunk = await reader.read(); if (chunk.done) break;
+        signal.throwIfAborted();
+        const chunk = await reader.read(); signal.throwIfAborted(); if (chunk.done) break;
         size += chunk.value.length;
         if (size > limit) return failure('download-too-large');
         parts.push(Buffer.from(chunk.value));
@@ -163,9 +177,12 @@ export class Updater implements UpdateAPI {
   check(): Promise<UpdateStatus> {
     if (this.work) return this.work;
     if (this.disposed || this.installing || this.state.phase === 'restart-required') return Promise.resolve(this.status());
+    // A manual request pins the release the user chose. Neither a background
+    // check nor the automatic preference may replace or discard that job.
+    if (this.pending === 'manual') return Promise.resolve(this.status());
     this.work = (async () => {
       this.nextCheck = Date.now() + INTERVAL;
-      this.pending = false; this.candidate = null;
+      this.pending = null; this.candidate = null; this.prepared = null;
       this.state.phase = 'checking'; this.state.error = null;
       try {
         const body = await this.request('/releases/latest', 1024 * 1024);
@@ -173,51 +190,112 @@ export class Updater implements UpdateAPI {
         this.state.checkedAt = new Date().toISOString();
         this.state.latestVersion = this.candidate?.version ?? this.state.currentVersion;
         this.state.phase = this.candidate ? 'available' : 'current';
-        if (this.state.automatic && this.candidate) this.pending = true;
+        if (this.state.automatic && this.candidate) this.pending = 'automatic';
         await this.save();
       } catch (error) { if (!this.disposed) { this.state.phase = 'error'; this.state.error = error instanceof UpdateFailure ? error.message : 'update-check-failed'; } }
       return this.status();
-    })().finally(() => { this.work = null; if (this.pending && !this.disposed) this.install(); });
+    })().finally(() => { this.work = null; if (this.pending && !this.disposed) this.startInstall(this.pending); });
     return this.work;
   }
   install(): UpdateStatus {
+    return this.startInstall('manual');
+  }
+  private startInstall(source: InstallSource): UpdateStatus {
+    if (!this.disposed && source === 'manual' && this.installing && !this.installing.submitted
+      && (this.installing.abort.signal.aborted || this.pending)) {
+      this.pending = 'manual'; return this.status();
+    }
     if (this.disposed || this.installing || this.work || !this.candidate || this.state.phase === 'restart-required') return this.status();
-    if (!this.options.idle()) { this.pending = true; this.state.phase = 'waiting-idle'; return this.status(); }
+    if (source === 'automatic' && !this.state.automatic) return this.status();
+    if (!this.options.idle()) {
+      void this.waitForIdle(source).catch(() => {
+        if (this.pending === source && this.state.phase === 'waiting-idle') {
+          this.pending = null; this.state.phase = 'error'; this.state.error = 'storage-failed';
+        }
+      });
+      return this.status();
+    }
     const candidate = this.candidate;
-    this.pending = false; this.installing = true; this.state.phase = 'downloading'; this.state.error = null;
+    const task: InstallTask = { source, abort: new AbortController(), submitted: false };
+    this.pending = null; this.installing = task; this.state.phase = 'downloading'; this.state.error = null;
     // Start outside the owner RPC/HMR call; replacing this plugin disposes its old scope.
-    setTimeout(() => { if (!this.disposed) void this.performInstall(candidate).finally(() => { this.installing = false; }); }, 0).unref();
+    setTimeout(() => { void this.performInstall(candidate, task).finally(() => {
+      if (this.installing === task) this.installing = null;
+      if (!this.installing && !this.disposed && this.pending === 'manual') this.startInstall('manual');
+    }); }, 0).unref();
     return this.status();
   }
-  private async performInstall(candidate: Candidate): Promise<void> {
-    try {
-      const archive = await this.request(`/releases/assets/${candidate.asset.id}`, MAX_ARCHIVE, true);
-      let hash = candidate.asset.digest?.match(/^sha256:([a-f\d]{64})$/i)?.[1]?.toLowerCase();
-      if (!hash && candidate.checksum) {
-        const sums = (await this.request(`/releases/assets/${candidate.checksum.id}`, 64 * 1024, true)).toString();
-        hash = sums.split(/\r?\n/).map(line => /^([a-f\d]{64})\s+\*?(\S+)$/.exec(line)).find(match => match?.[2] === candidate.asset.name)?.[1];
+  private async waitForIdle(source: InstallSource): Promise<void> {
+    this.pending = this.pending === 'manual' ? 'manual' : source; this.state.phase = 'waiting-idle';
+    await this.save().catch(() => failure('storage-failed'));
+  }
+  private async prepareArchive(candidate: Candidate, task: InstallTask): Promise<string> {
+    const active = () => { this.abort.signal.throwIfAborted(); task.abort.signal.throwIfAborted(); };
+    active();
+    const cached = this.prepared;
+    if (cached?.candidate === candidate) {
+      const info = await stat(cached.file).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+      if (info && info.size !== candidate.asset.size) { this.prepared = null; return failure('checksum-failed'); }
+      const archive = info ? await readFile(cached.file) : null;
+      active();
+      if (archive) {
+        if (archive.length !== candidate.asset.size || createHash('sha256').update(archive).digest('hex') !== cached.hash) {
+          this.prepared = null; return failure('checksum-failed');
+        }
+        await validateArchive(cached.file, candidate.version, this.options.hostVersion);
+        active(); return cached.file;
       }
-      if (!hash || createHash('sha256').update(archive).digest('hex') !== hash) return failure('checksum-failed');
-      if (archive.length !== candidate.asset.size) return failure('size-mismatch');
-      await mkdir(this.directory, { recursive: true });
-      const file = join(this.directory, `${manifest.name}-${candidate.version}-${hash.slice(0, 12)}.tgz`);
-      await writeFile(file, archive, { mode: 0o600 });
-      await validateArchive(file, candidate.version, this.options.hostVersion);
-      if (this.disposed) return;
-      if (!this.options.idle()) { this.pending = true; this.state.phase = 'waiting-idle'; return; }
+      this.prepared = null;
+    }
+    const archive = await this.request(`/releases/assets/${candidate.asset.id}`, MAX_ARCHIVE, true, task.abort.signal);
+    active();
+    let hash = candidate.asset.digest?.match(/^sha256:([a-f\d]{64})$/i)?.[1]?.toLowerCase();
+    if (!hash && candidate.checksum) {
+      const sums = (await this.request(`/releases/assets/${candidate.checksum.id}`, 64 * 1024, true, task.abort.signal)).toString();
+      active();
+      hash = sums.split(/\r?\n/).map(line => /^([a-f\d]{64})\s+\*?(\S+)$/.exec(line)).find(match => match?.[2] === candidate.asset.name)?.[1];
+    }
+    if (!hash || createHash('sha256').update(archive).digest('hex') !== hash) return failure('checksum-failed');
+    if (archive.length !== candidate.asset.size) return failure('size-mismatch');
+    await mkdir(this.directory, { recursive: true }); active();
+    const file = join(this.directory, `${manifest.name}-${candidate.version}-${hash.slice(0, 12)}.tgz`);
+    await writeFile(file, archive, { mode: 0o600 }); active();
+    await validateArchive(file, candidate.version, this.options.hostVersion); active();
+    this.prepared = { candidate, file, hash };
+    return file;
+  }
+  private async performInstall(candidate: Candidate, task: InstallTask): Promise<void> {
+    const active = () => { this.abort.signal.throwIfAborted(); task.abort.signal.throwIfAborted(); };
+    try {
+      active();
+      const file = await this.prepareArchive(candidate, task);
+      active();
+      if (!this.options.idle()) { active(); await this.waitForIdle(task.source); active(); return; }
       this.state.phase = 'installing'; await this.save();
+      active();
+      if (!this.options.idle()) { active(); await this.waitForIdle(task.source); active(); return; }
+      // Cancellation is effective until this synchronous handoff. The host owns
+      // an installation already submitted, including plugin disposal during HMR.
+      task.submitted = true;
       const result = await this.options.manager.installBundle(file, { enabled: true, requestId: `${manifest.name}-${randomUUID()}` });
       if (!['applied', 'restart-required'].includes(result.application) || result.version !== candidate.version) return failure('host-install-failed');
       this.state.phase = result.application === 'restart-required' ? 'restart-required' : 'current';
       if (result.application === 'applied') this.state.currentVersion = candidate.version;
       this.state.updatedAt = new Date().toISOString(); this.state.error = null;
+      this.prepared = null;
       await this.save();
     } catch (error) {
-      this.state.phase = 'error'; this.state.error = error instanceof UpdateFailure ? error.message : 'update-install-failed';
+      if (this.disposed && !task.submitted) return;
+      if (task.abort.signal.aborted && !task.submitted) {
+        // Once available is visible, a manual retry must be accepted even while
+        // this cancelled task's final state snapshot is still being persisted.
+        if (this.installing === task) this.installing = null;
+        if (this.state.error !== 'storage-failed') { this.state.phase = 'available'; this.state.error = null; }
+      } else { this.pending = null; this.state.phase = 'error'; this.state.error = error instanceof UpdateFailure ? error.message : 'update-install-failed'; }
       await this.save().catch(() => {});
     }
   }
-  dispose(): void { this.disposed = true; this.pending = false; clearInterval(this.timer); this.abort.abort(); }
+  dispose(): void { this.disposed = true; this.pending = null; clearInterval(this.timer); this.abort.abort(); }
 }
 
 export function registerUpdater(ctx: HostContext, hostVersion: string, idle: () => boolean): UpdateAPI {

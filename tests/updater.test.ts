@@ -7,6 +7,11 @@ import { create } from 'tar';
 import { releaseCandidate, Updater, validateArchive } from '../src/updater.js';
 
 const roots: string[] = [], updaters: Updater[] = [];
+function deferred<T>() {
+  let resolve!: (value: T) => void, reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((accept, fail) => { resolve = accept; reject = fail; });
+  return { promise, resolve, reject };
+}
 afterEach(async () => { for (const value of updaters.splice(0)) value.dispose(); vi.useRealTimers(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 async function fixture(changes: Record<string, unknown> = {}, link = false) {
   const directory = await mkdtemp(join(tmpdir(), 'flash-update-')); roots.push(directory);
@@ -21,13 +26,13 @@ async function fixture(changes: Record<string, unknown> = {}, link = false) {
   const release = { tag_name: 'v0.1.8', draft: false, prerelease: false, assets: [{ id: 10, name: 'dsh-flash-stabilizer-0.1.8.tgz', size: buffer.length, digest }] };
   return { directory, file, buffer, release };
 }
-async function setup(options: { busy?: boolean; checksum?: boolean; fail?: boolean } = {}) {
+async function setup(options: { busy?: boolean; checksum?: boolean; fail?: boolean; idleProbe?: () => boolean } = {}) {
   const data = await fixture(); let idle = !options.busy;
   if (options.checksum) data.release.assets[0]!.digest = 'sha256:' + '0'.repeat(64);
   const transport = vi.fn<typeof fetch>(async (url) => String(url).endsWith('/latest')
     ? new Response(JSON.stringify(data.release)) : new Response(new Uint8Array(data.buffer)));
   const installBundle = vi.fn(async (_spec: string) => ({ application: options.fail ? 'failed' : 'restart-required', version: '0.1.8' }));
-  const updater = new Updater({ directory: data.directory, hostVersion: '0.2.1-rc.2', manager: { installBundle }, idle: () => idle,
+  const updater = new Updater({ directory: data.directory, hostVersion: '0.2.1-rc.2', manager: { installBundle }, idle: options.idleProbe ?? (() => idle),
     fetch: transport, schedule: false, currentVersion: '0.1.7' });
   updaters.push(updater); await updater.start();
   return { ...data, updater, transport, installBundle, idle: (value: boolean) => { idle = value; } };
@@ -39,6 +44,126 @@ async function settled(updater: Updater) {
   }
   throw Error('updater did not settle');
 }
+it.each(['late-response', 'abort'])('revokes an automatic download (%s) and allows a later manual install', async outcome => {
+  const { updater, transport, buffer, release, installBundle } = await setup();
+  const started = deferred<void>(), download = deferred<Response>();
+  let signal: AbortSignal | undefined;
+  transport.mockImplementation(async (url, options) => {
+    if (String(url).endsWith('/latest')) return new Response(JSON.stringify(release));
+    signal = options?.signal ?? undefined;
+    if (outcome === 'abort') signal?.addEventListener('abort', () => download.reject(signal?.reason), { once: true });
+    started.resolve(); return download.promise;
+  });
+  await updater.setAutomatic(true); await started.promise;
+  await updater.setAutomatic(false);
+  const aborted = signal?.aborted;
+  // A transport may resolve after cancellation; it must not reach the installer.
+  download.resolve(new Response(new Uint8Array(buffer))); await settled(updater);
+  expect(aborted).toBe(true);
+  expect(updater.status()).toMatchObject({ automatic: false, phase: 'available', error: null });
+  expect(installBundle).not.toHaveBeenCalled();
+  transport.mockImplementation(async () => new Response(new Uint8Array(buffer)));
+  updater.install(); await settled(updater); expect(installBundle).toHaveBeenCalledTimes(1);
+});
+it('does not cancel a manually requested download when automatic updates are disabled', async () => {
+  const { updater, transport, buffer, installBundle } = await setup();
+  await updater.check();
+  const started = deferred<void>(), download = deferred<Response>();
+  let signal: AbortSignal | undefined;
+  transport.mockImplementationOnce(async (_url, options) => {
+    signal = options?.signal ?? undefined; started.resolve(); return download.promise;
+  });
+  updater.install(); await started.promise; await updater.setAutomatic(false);
+  expect(signal?.aborted).toBe(false);
+  download.resolve(new Response(new Uint8Array(buffer))); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1);
+});
+it('retains a manual retry submitted while a cancelled automatic download is still unwinding', async () => {
+  const { updater, transport, buffer, release, installBundle } = await setup();
+  const started = deferred<void>(), download = deferred<Response>(); let downloads = 0;
+  transport.mockImplementation(async url => {
+    if (String(url).endsWith('/latest')) return new Response(JSON.stringify(release));
+    if (++downloads === 1) { started.resolve(); return download.promise; }
+    return new Response(new Uint8Array(buffer));
+  });
+  await updater.setAutomatic(true); await started.promise;
+  await updater.setAutomatic(false); updater.install();
+  download.resolve(new Response(new Uint8Array(buffer)));
+  await vi.waitFor(() => expect(installBundle).toHaveBeenCalledTimes(1));
+  await settled(updater);
+  expect(updater.status()).toMatchObject({ automatic: false, phase: 'restart-required' });
+});
+it('retains a queued manual install when automatic updates are disabled', async () => {
+  const { updater, idle, installBundle } = await setup({ busy: true });
+  await updater.check(); updater.install(); await updater.setAutomatic(false);
+  expect(updater.status().phase).toBe('waiting-idle');
+  idle(true); updater.install(); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1);
+});
+it('preserves a queued manual install across automatic on/off and later checks', async () => {
+  const { updater, transport, idle, installBundle } = await setup({ busy: true });
+  await updater.check(); updater.install();
+  await updater.setAutomatic(true); await updater.check(); await updater.setAutomatic(false);
+  expect(updater.status()).toMatchObject({ phase: 'waiting-idle', automatic: false });
+  expect(transport).toHaveBeenCalledTimes(1);
+  idle(true); updater.install(); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1);
+});
+it.each([2, 3])('persists waiting-idle at idle check %i and reuses the validated archive', async busyAt => {
+  let probes = 0, allow = false;
+  const { updater, directory, transport, installBundle } = await setup({ idleProbe: () => allow || ++probes < busyAt });
+  await updater.check(); updater.install(); await settled(updater);
+  expect(updater.status().phase).toBe('waiting-idle'); expect(installBundle).not.toHaveBeenCalled();
+  await vi.waitFor(async () => expect(JSON.parse(await readFile(join(directory, '.flash-stabilizer/updates/state.json'), 'utf8')).phase).toBe('waiting-idle'));
+  allow = true; updater.install(); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1);
+  expect(transport.mock.calls.filter(([url]) => String(url).includes('/assets/'))).toHaveLength(1);
+});
+it('rechecks a cached archive before handing it to the host', async () => {
+  let probes = 0, allow = false;
+  const { updater, directory, release, transport, installBundle } = await setup({ idleProbe: () => allow || ++probes < 2 });
+  await updater.check(); updater.install(); await settled(updater);
+  const hash = release.assets[0]!.digest.slice(7);
+  await writeFile(join(directory, '.flash-stabilizer/updates', `dsh-flash-stabilizer-0.1.8-${hash.slice(0, 12)}.tgz`), 'changed since validation');
+  allow = true; updater.install(); await settled(updater);
+  expect(installBundle).not.toHaveBeenCalled(); expect(updater.status()).toMatchObject({ phase: 'error', error: 'checksum-failed' });
+  expect(transport.mock.calls.filter(([url]) => String(url).includes('/assets/'))).toHaveLength(1);
+});
+it('revokes a queued automatic install when automatic updates are disabled', async () => {
+  const { updater, installBundle } = await setup({ busy: true });
+  await updater.setAutomatic(true); await updater.check();
+  expect(updater.status().phase).toBe('waiting-idle');
+  await updater.setAutomatic(false);
+  expect(updater.status()).toMatchObject({ automatic: false, phase: 'available' });
+  expect(installBundle).not.toHaveBeenCalled();
+});
+it('does not revive a cancelled download after automatic updates are enabled again', async () => {
+  const { updater, transport, buffer, release, installBundle } = await setup();
+  const started = deferred<void>(), download = deferred<Response>();
+  transport.mockImplementation(async url => {
+    if (String(url).endsWith('/latest')) return new Response(JSON.stringify(release));
+    started.resolve(); return download.promise;
+  });
+  await updater.setAutomatic(true); await started.promise;
+  await updater.setAutomatic(false); await updater.setAutomatic(true);
+  download.resolve(new Response(new Uint8Array(buffer))); await settled(updater);
+  expect(updater.status()).toMatchObject({ automatic: true, phase: 'available' });
+  expect(installBundle).not.toHaveBeenCalled();
+  transport.mockImplementation(async url => String(url).endsWith('/latest')
+    ? new Response(JSON.stringify(release)) : new Response(new Uint8Array(buffer)));
+  await updater.check(); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1);
+});
+it('lets an automatic installation already handed to the host finish after disabling', async () => {
+  const { updater, installBundle } = await setup();
+  const started = deferred<void>(), installed = deferred<{ application: string; version: string }>();
+  installBundle.mockImplementationOnce(async () => { started.resolve(); return installed.promise; });
+  await updater.setAutomatic(true); await started.promise;
+  await updater.setAutomatic(false);
+  installed.resolve({ application: 'restart-required', version: '0.1.8' }); await settled(updater);
+  expect(updater.status()).toMatchObject({ automatic: false, phase: 'restart-required', error: null });
+  expect(installBundle).toHaveBeenCalledTimes(1);
+});
 it('requires a newer formal release with the exact asset and checksum', () => {
   expect(releaseCandidate({ tag_name: 'v0.1.7', assets: [] }, '0.1.7')).toBeNull();
   expect(() => releaseCandidate({ tag_name: 'v0.1.8', assets: [] }, '0.1.7')).toThrow('missing-artifact');
@@ -106,12 +231,16 @@ it('persists the automatic switch and installs only after opting in', async () =
   expect(saved.automatic).toBe(true); expect(JSON.stringify(saved)).not.toContain('fixture-token');
   await updater.setAutomatic(false); expect(updater.status().automatic).toBe(false);
 });
-it('clears a queued candidate when a fresh check fails', async () => {
-  const { updater, transport, idle, installBundle } = await setup({ busy: true });
+it('pins the manual candidate without a network recheck that could discard the user request', async () => {
+  const { updater, transport, idle, installBundle, buffer } = await setup({ busy: true });
   await updater.check(); updater.install();
   transport.mockRejectedValueOnce(Error('offline'));
-  await updater.check(); idle(true); updater.install();
-  expect(updater.status().phase).toBe('error'); expect(installBundle).not.toHaveBeenCalled();
+  await updater.check();
+  expect(transport).toHaveBeenCalledTimes(1); expect(updater.status().phase).toBe('waiting-idle');
+  transport.mockReset().mockImplementation(async () => new Response(new Uint8Array(buffer)));
+  // The existing fixture remains the chosen release; another check cannot replace it.
+  idle(true); updater.install(); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1);
 });
 it('schedules checks every six hours only when automatic updates are enabled', async () => {
   const { directory, transport, installBundle } = await setup({ busy: true });

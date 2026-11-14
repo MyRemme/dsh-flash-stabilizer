@@ -33,7 +33,7 @@ try {
     const native = await load('@deepseek-ai/dsh-tool-executor-native'); await ctx.plugin(native);
   }
   let response = 'normal', requests = 0, toolBodies = 0, correctionsSeen = 0, guardClosed = false, guardConsumed = 0;
-  let reviewReady, reviewResume, queuedStep = 0;
+  let reviewReady, reviewResume, queuedStep = 0, scenarioChars = 0;
   let recoveryStep = 0, sawRecoveredToolResult = false, waitingReady;
   const turnReasons = [];
   ctx.on('session/event', (_session, event) => { if (event.type === 'turn/end') turnReasons.push(event.data.reason.kind); });
@@ -43,8 +43,8 @@ try {
     async *stream(options) {
       requests++;
       if (options.messages.some(m => m.role === 'user' && m.content?.some(c => c.type === 'text' && c.text.includes('检测到当前步骤出现重复推理。')))) correctionsSeen++;
-      assert.equal(options.model, 'deepseek-flash');
-      if (['checklist', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup'].includes(response)) {
+      assert.ok(['deepseek-flash', 'vendor/DeepSeek-Custom:fast'].includes(options.model), 'deterministic fixture model');
+      if (['checklist', 'named-checklist', 'path-checklist', 'dense-checklist', 'dense-named-checklist', 'fenced-loop', 'inline-fence-loop', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup'].includes(response)) {
         if (response === 'tool-then-single' && ++queuedStep === 1) {
           yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'before-single-loop', name: 'read_evidence', arguments: '{}' } };
           yield { type: 'finish', reason: { kind: 'tool-calls' } }; return;
@@ -58,9 +58,14 @@ try {
         }
         assert.ok(!queued || queuedStep === 1, 'bounded queued input test');
         const blocks = response === 'checklist' ? [{ type: 'reasoning', text: Array.from({ length: 100 }, (_, i) => `项目 ${i}。检查。通过。保留。\n`).join('') }]
+          : response === 'named-checklist' ? [{ type: 'reasoning', text: Array.from({ length: 200 }, (_, i) => `模块 ${String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)}。检查。通过。保留。\n`).join('') }]
+          : response === 'path-checklist' ? [{ type: 'reasoning', text: Array.from({ length: 200 }, (_, i) => `src/${String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)}.ts。检查。通过。检查。通过。\n`).join('') }]
+          : response === 'dense-checklist' || response === 'dense-named-checklist' ? [{ type: 'reasoning', text: Array.from({ length: 200 }, (_, i) => `${response === 'dense-checklist' ? `项目 ${i}` : `模块 ${String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)}`}。检查。通过。保留。无误。检查。通过。\n`).join('') }]
+          : response === 'fenced-loop' || response === 'inline-fence-loop' ? [{ type: 'reasoning', text: ('好。执行。好。'.repeat(40) + (response === 'fenced-loop' ? '\n```ts\nconst a = 1;\n```\n' : '\n```inline```\n')).repeat(20) }]
           : ['single-letter', 'single-body', 'tool-then-single'].includes(response) ? [{ type: response === 'single-body' ? 'text' : 'reasoning', text: '好。'.repeat(17233) }]
           : response === 'body-loop' ? [{ type: 'text', text: 'Template line, repeat as requested. '.repeat(200) }, { type: 'reasoning', text: '检查。继续。'.repeat(1000) }]
             : [{ type: 'reasoning', text: '检查。继续。'.repeat(1000) }];
+        scenarioChars = blocks.reduce((sum, block) => sum + block.text.length, 0);
         for (const [index, block] of blocks.entries()) {
           yield { type: 'block-start', index, blockType: block.type };
           if (queued) { reviewReady(); await reviewResume.promise; }
@@ -129,7 +134,7 @@ try {
       }
     }
   }
-  ctx.llm.registerAdapter(['mock'], new Adapter());
+  ctx.llm.registerAdapter(['mock', 'mock-alt'], new Adapter());
   const seen = [];
   ctx.on('llm/stream', (_options, next) => (async function* () { for await (const chunk of next()) { seen.push(chunk); yield chunk; } })());
   pluginFiber = ctx.plugin(stabilizer, { ...hostHint, mode: 'observe' });
@@ -153,6 +158,40 @@ try {
   response = 'tools'; await send();
   assert.equal(toolBodies, 4, 'plugin must not skip/replay tool calls');
   assert.ok(ctx.flashStabilizer.status().counts['tool-repeat'] >= 1, 'tool repetition detection'); checks.push('tool-results');
+  const originalAgent = current;
+  const customRoute = { provider: 'mock', model: 'vendor/DeepSeek-Custom:fast' };
+  current = await ctx.agentLoop.create(sessions.SessionId(`custom-model-${version}`), customRoute);
+  response = 'repeat'; await send();
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).confirmed, 1, 'default scope includes third-party model names');
+  checks.push('default-third-party-model');
+  await ctx.flashStabilizer.setModelScope({ scope: 'selected', selections: [customRoute] });
+  current = await ctx.agentLoop.create(sessions.SessionId(`excluded-provider-${version}`), { ...customRoute, provider: 'mock-alt' });
+  await send();
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).monitoredRequests, 0, 'same model on an unselected provider is excluded');
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).coverage, 'other-model');
+  checks.push('scope-provider-isolation');
+  await ctx.flashStabilizer.setModelScope({ scope: 'all', selections: [customRoute] });
+  await send();
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).confirmed, 1, 'restoring all includes the next request');
+  assert.deepEqual(ctx.flashStabilizer.modelScope().selections, [customRoute], 'all mode preserves selections');
+  checks.push('scope-restored-all');
+  await ctx.flashStabilizer.setModelScope({ scope: 'selected', selections: [customRoute] });
+  current = await ctx.agentLoop.create(sessions.SessionId(`selected-model-${version}`), customRoute);
+  await send();
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).confirmed, 1, 'selected provider/model is monitored');
+  checks.push('scope-selected-model');
+  await ctx.flashStabilizer.setModelScope({ scope: 'all', selections: [] });
+  current = originalAgent;
+  response = 'waiting';
+  const observeReady = new Promise(resolve => { waitingReady = resolve; });
+  const observeStopped = send(); await bound(observeReady);
+  current.cancel({ kind: 'user' }); await observeStopped;
+  const observed = ctx.flashStabilizer.sessionStatus(current.id);
+  assert.equal(observed.live.risk, 'confirmed', 'manual stop retains confirmed evidence');
+  assert.equal(observed.live.incomplete, false, 'manual stop is not a detector failure');
+  assert.equal(observed.latestEvent.kind, 'stream-repeat');
+  assert.equal(observed.latestEvent.action, 'observe-only');
+  checks.push('observe-user-stop-evidence');
   const before = ctx.flashStabilizer.status().counts['stream-repeat'];
   ctx.flashStabilizer.setSessionEnabled(current.id, false); response = 'repeat'; await send();
   assert.equal(ctx.flashStabilizer.status().counts['stream-repeat'], before); checks.push('session-disable');
@@ -184,6 +223,9 @@ try {
   current.cancel({ kind: 'user' }); await stopped;
   assert.equal(requests - beforeStop, 1, 'user stop suppresses followup');
   assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).latestEvent.action, 'correction-revoked');
+  assert.equal(ctx.flashStabilizer.sessionStatus(current.id).live.risk, 'confirmed');
+  checks.push('assist-user-stop-evidence');
   checks.push('assist-user-stop', 'no-injected-residue');
   await pluginFiber.dispose();
   pluginFiber = ctx.plugin(stabilizer, { ...hostHint, mode: 'guard' }); await pluginFiber;
@@ -200,7 +242,7 @@ try {
   assert.ok(ctx.flashStabilizer.status().events.some(e => e.action === 'stop-confirmed'), 'durable host stop confirmed');
   assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
   checks.push('guard-cancel', 'guard-settlement', 'guard-no-retry', 'guard-no-prompt');
-  for (const scenario of ['checklist', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup']) {
+  for (const scenario of ['checklist', 'named-checklist', 'path-checklist', 'dense-checklist', 'dense-named-checklist', 'fenced-loop', 'inline-fence-loop', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup']) {
     response = scenario; queuedStep = 0;
     current = await ctx.agentLoop.create(sessions.SessionId(`${scenario}-${version}`), { provider: 'mock', model: 'deepseek-flash' });
     const before = requests;
@@ -214,15 +256,18 @@ try {
     }
     await done; await new Promise(resolve => setImmediate(resolve));
     const status = ctx.flashStabilizer.sessionStatus(current.id);
-    if (scenario === 'checklist') {
-      assert.ok(status.events.some(event => event.uncertainty === 'changing-numbered-units' && event.action === 'notify-only'));
+    if (scenario.includes('checklist')) {
+      const uncertainty = ['checklist', 'dense-checklist'].includes(scenario) ? 'changing-numbered-units' : 'changing-units';
+      assert.ok(status.events.some(event => event.uncertainty === uncertainty && event.action === 'notify-only'));
       assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);
-    } else if (['single-letter', 'tool-then-single'].includes(scenario)) {
+      assert.equal(status.recoverySubmitted, 0); assert.equal(requests - before, 1);
+      assert.equal(status.live.reasoningChars, scenarioChars, 'entire changing checklist completed');
+    } else if (['single-letter', 'tool-then-single', 'fenced-loop', 'inline-fence-loop'].includes(scenario)) {
       assert.equal(status.confirmed, 1); assert.equal(status.cancelRequested, 1);
       assert.ok(status.events.some(event => event.action === 'stop-confirmed'));
       assert.equal(requests - before, scenario === 'tool-then-single' ? 2 : 1);
       assert.equal(status.recoverySubmitted, 0);
-      assert.ok(status.live.reasoningChars < 1200, 'single-letter stop occurs before consuming the full loop');
+      assert.ok(status.live.reasoningChars < (scenario.includes('fence') ? 2000 : 1200), 'stop occurs before consuming the full loop');
       if (scenario === 'tool-then-single') assert.equal(status.toolResults, 1, 'prior tool progress does not disable protection');
     } else if (scenario === 'single-body') {
       assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);
@@ -230,12 +275,14 @@ try {
     } else if (scenario === 'body-loop') {
       assert.deepEqual(status.events.filter(event => event.confirmed).map(event => event.contentType).sort(), ['reasoning', 'text']);
       assert.ok(status.events.some(event => event.action === 'stop-confirmed'));
+      assert.ok(status.events.filter(event => event.kind === 'stream-repeat' && event.contentType === 'text').every(event => event.action === 'observe-only'));
     } else {
       assert.equal(status.cancelRequested, 0);
       assert.ok(status.events.some(event => event.action === 'user-input-takes-priority'));
       assert.equal(requests - before, 2, 'host consumes queued input exactly once');
       assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
     }
+    assert.ok(status.events.filter(event => event.kind === 'stream-repeat' && !event.confirmed && !event.uncertainty).every(event => event.action === 'observe-only'));
     checks.push(`guard-${scenario}`);
   }
   await pluginFiber.dispose();
