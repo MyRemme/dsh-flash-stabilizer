@@ -14,12 +14,23 @@ export class RecoveryController {
   private pending = new Map<Agent, { mode: 'assist' | 'auto' | 'guard'; signal: AbortSignal; scheduled: boolean; origin?: { turn: number; step: number } | undefined }>();
   private disabled = new Set<string>();
   private disposed = false;
-  constructor(private readonly config: Settings, private readonly record: (action: string, agent: Agent, origin?: { turn: number; step: number }) => void) {}
+  private mode: Settings['mode'];
+  constructor(private readonly config: Settings, private readonly record: (action: string, agent: Agent, origin?: { turn: number; step: number }) => void) {
+    this.mode = config.mode;
+  }
   private revoke(agent: Agent, action = 'correction-revoked'): void {
     const pending = this.pending.get(agent);
     if (!pending) return;
     this.pending.delete(agent);
     this.record(pending.mode === 'guard' ? 'stop-unconfirmed' : action, agent, pending.origin);
+  }
+  setMode(mode: Settings['mode']): void {
+    this.mode = mode;
+    if (mode === 'observe' || mode === 'guard') {
+      for (const [agent, pending] of this.pending) {
+        if (pending.mode === 'assist') this.revoke(agent);
+      }
+    }
   }
   resetByUser(agent: Agent): void {
     this.revoke(agent, 'user-input-takes-priority');
@@ -30,12 +41,12 @@ export class RecoveryController {
   }
   request(agent: Agent, signal: AbortSignal, verified: boolean, origin?: { turn: number; step: number }): void {
     if (this.disposed || this.disabled.has(agent.id) || signal.aborted || this.pending.has(agent)) return;
-    if (this.config.mode === 'observe') return;
+    if (this.mode === 'observe') return;
     if (agent.inbox && (agent.inbox.nextStep.length || agent.inbox.nextTurn.length)) {
       this.record('user-input-takes-priority', agent, origin);
       return;
     }
-    if (this.config.mode === 'guard') {
+    if (this.mode === 'guard') {
       if (!verified || !agent.cancel) { this.record('intervention-unavailable', agent, origin); return; }
       this.pending.set(agent, { mode: 'guard', signal, scheduled: false, origin });
       try {
@@ -46,7 +57,7 @@ export class RecoveryController {
     }
     const count = this.attempts.get(agent.id) ?? 0;
     if (count >= this.config.maxRecoveries) { this.record('budget-exhausted', agent, origin); return; }
-    if (this.config.mode === 'assist') {
+    if (this.mode === 'assist') {
       if (!agent.followup || !agent.inbox) { this.record('intervention-unavailable', agent, origin); return; }
       this.attempts.set(agent.id, count + 1);
       this.pending.set(agent, { mode: 'assist', signal, scheduled: false, origin });

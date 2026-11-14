@@ -44,7 +44,7 @@ try {
       requests++;
       if (options.messages.some(m => m.role === 'user' && m.content?.some(c => c.type === 'text' && c.text.includes('检测到当前步骤出现重复推理。')))) correctionsSeen++;
       assert.ok(['deepseek-flash', 'vendor/DeepSeek-Custom:fast'].includes(options.model), 'deterministic fixture model');
-      if (['checklist', 'named-checklist', 'path-checklist', 'dense-checklist', 'dense-named-checklist', 'fenced-loop', 'inline-fence-loop', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup'].includes(response)) {
+      if (['checklist', 'named-checklist', 'path-checklist', 'dense-checklist', 'dense-named-checklist', 'fenced-loop', 'inline-fence-loop', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'fixed-number-phrase', 'queued-steering', 'queued-followup'].includes(response)) {
         if (response === 'tool-then-single' && ++queuedStep === 1) {
           yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'before-single-loop', name: 'read_evidence', arguments: '{}' } };
           yield { type: 'finish', reason: { kind: 'tool-calls' } }; return;
@@ -63,6 +63,7 @@ try {
           : response === 'dense-checklist' || response === 'dense-named-checklist' ? [{ type: 'reasoning', text: Array.from({ length: 200 }, (_, i) => `${response === 'dense-checklist' ? `项目 ${i}` : `模块 ${String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)}`}。检查。通过。保留。无误。检查。通过。\n`).join('') }]
           : response === 'fenced-loop' || response === 'inline-fence-loop' ? [{ type: 'reasoning', text: ('好。执行。好。'.repeat(40) + (response === 'fenced-loop' ? '\n```ts\nconst a = 1;\n```\n' : '\n```inline```\n')).repeat(20) }]
           : ['single-letter', 'single-body', 'tool-then-single'].includes(response) ? [{ type: response === 'single-body' ? 'text' : 'reasoning', text: '好。'.repeat(17233) }]
+          : response === 'fixed-number-phrase' ? [{ type: 'reasoning', text: Array.from({ length: 180 }, (_, i) => `步骤 1 已确认。核对 v2 接口。\n${i % 9 === 0 ? '（备注）再核对一次。\n' : ''}`).join('') }]
           : response === 'body-loop' ? [{ type: 'text', text: 'Template line, repeat as requested. '.repeat(200) }, { type: 'reasoning', text: '检查。继续。'.repeat(1000) }]
             : [{ type: 'reasoning', text: '检查。继续。'.repeat(1000) }];
         scenarioChars = blocks.reduce((sum, block) => sum + block.text.length, 0);
@@ -242,7 +243,12 @@ try {
   assert.ok(ctx.flashStabilizer.status().events.some(e => e.action === 'stop-confirmed'), 'durable host stop confirmed');
   assert.equal(current.inbox.nextStep.length, 0); assert.equal(current.inbox.nextTurn.length, 0);
   checks.push('guard-cancel', 'guard-settlement', 'guard-no-retry', 'guard-no-prompt');
-  for (const scenario of ['checklist', 'named-checklist', 'path-checklist', 'dense-checklist', 'dense-named-checklist', 'fenced-loop', 'inline-fence-loop', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'queued-steering', 'queued-followup']) {
+  await ctx.flashStabilizer.setMode('observe');
+  assert.equal(ctx.flashStabilizer.status().mode, 'observe');
+  await ctx.flashStabilizer.setMode('guard');
+  assert.equal(ctx.flashStabilizer.status().mode, 'guard');
+  checks.push('runtime-mode-switch');
+  for (const scenario of ['checklist', 'named-checklist', 'path-checklist', 'dense-checklist', 'dense-named-checklist', 'fenced-loop', 'inline-fence-loop', 'body-loop', 'single-letter', 'single-body', 'tool-then-single', 'fixed-number-phrase', 'queued-steering', 'queued-followup']) {
     response = scenario; queuedStep = 0;
     current = await ctx.agentLoop.create(sessions.SessionId(`${scenario}-${version}`), { provider: 'mock', model: 'deepseek-flash' });
     const before = requests;
@@ -262,12 +268,12 @@ try {
       assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);
       assert.equal(status.recoverySubmitted, 0); assert.equal(requests - before, 1);
       assert.equal(status.live.reasoningChars, scenarioChars, 'entire changing checklist completed');
-    } else if (['single-letter', 'tool-then-single', 'fenced-loop', 'inline-fence-loop'].includes(scenario)) {
+    } else if (['single-letter', 'tool-then-single', 'fenced-loop', 'inline-fence-loop', 'fixed-number-phrase'].includes(scenario)) {
       assert.equal(status.confirmed, 1); assert.equal(status.cancelRequested, 1);
       assert.ok(status.events.some(event => event.action === 'stop-confirmed'));
       assert.equal(requests - before, scenario === 'tool-then-single' ? 2 : 1);
       assert.equal(status.recoverySubmitted, 0);
-      assert.ok(status.live.reasoningChars < (scenario.includes('fence') ? 2000 : 1200), 'stop occurs before consuming the full loop');
+      assert.ok(status.live.reasoningChars < (scenario.includes('fence') || scenario === 'fixed-number-phrase' ? 2000 : 1200), 'stop occurs before consuming the full loop');
       if (scenario === 'tool-then-single') assert.equal(status.toolResults, 1, 'prior tool progress does not disable protection');
     } else if (scenario === 'single-body') {
       assert.equal(status.confirmed, 0); assert.equal(status.cancelRequested, 0);

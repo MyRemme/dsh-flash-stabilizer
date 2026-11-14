@@ -30,6 +30,8 @@ it('loads and unloads in the real published DSH AgentLoop and detects actual too
   expect(result.checks).toContain('guard-single-letter');
   expect(result.checks).toContain('guard-single-body');
   expect(result.checks).toContain('guard-tool-then-single');
+  expect(result.checks).toContain('guard-fixed-number-phrase');
+  expect(result.checks).toContain('runtime-mode-switch');
   expect(result.checks).toContain('guard-queued-steering');
   expect(result.checks).toContain('guard-queued-followup');
 }, 35000);

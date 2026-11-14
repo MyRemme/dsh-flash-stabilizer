@@ -10,7 +10,7 @@
 dsh plugin --profile desktop add './dsh-flash-stabilizer-x.y.z.tgz'
 ```
 
-打开 DSH 的「Flash 防空转」面板。默认启用监控并只告警。需要缩小范围时，选择「仅选中的模型」，按渠道勾选模型并保存。设置保存在当前 profile，重启后恢复。
+打开 DSH 的「Flash 防空转」面板。默认启用监控并只告警。可在面板直接切换处理模式（`observe` / `guard` / `assist`）、按对话暂停或恢复监控；需要缩小范围时，选择「仅选中的模型」，按渠道勾选模型并保存。设置保存在当前 profile，重启后恢复。
 
 | 模式 | 行为 |
 | --- | --- |
@@ -18,7 +18,7 @@ dsh plugin --profile desktop add './dsh-flash-stabilizer-x.y.z.tgz'
 | `guard` | 确认推理重复后请求宿主停止本轮，单独显示宿主的停止确认 |
 | `assist` | 当前回合结束后可提交独立的纠正回合，每个用户任务默认最多两次 |
 
-模式通过 profile 的 `cordis.patch.yml` 中 `id: flash-stabilizer` 对应的 `config.mode` 设置。插件要求 Node.js 22.18.0 或更新版本。
+模式可在「Flash 防空转」面板的运行状态区实时切换，也可通过 profile 的 `cordis.patch.yml` 中 `id: flash-stabilizer` 对应的 `config.mode` 设置。插件要求 Node.js 22.18.0 或更新版本。
 
 ## 适配版本
 
@@ -56,7 +56,7 @@ dsh plugin --profile desktop add './dsh-flash-stabilizer-x.y.z.tgz'
 | 历史 DSH 会话回放 | 一份会话的 1,530 次助手记录中，检测器确认 330 次重复。 |
 | 宿主停止回放 | 对其中 23 段无正文、无工具的重复流，隔离宿主全部记录了停止确认。 |
 | 安装包兼容性 | 35 个可用 DSH 版本通过，另有 2 个版本缺少宿主包。测试使用确定性模型适配器。[兼容性矩阵](compatibility/MATRIX.md) |
-| 自动化测试 | 276 项通过，覆盖检测规则、监控范围、会话状态和更新流程。 |
+| 自动化测试 | 284 项通过，覆盖检测规则、监控范围、会话状态和更新流程。 |
 
 回放结果对应上述记录的检测和宿主行为。实际模型的输出特征会影响检测结果。
 

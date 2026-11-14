@@ -36,6 +36,17 @@ describe('bounded recovery', () => {
     c.setEnabled(agent, false); c.setEnabled(agent, true);
     expect(actions).toEqual(['correction-deferred', 'correction-revoked']);
   });
+  it('revokes deferred assist corrections when switching mode to observe or guard', () => {
+    for (const nextMode of ['observe', 'guard'] as const) {
+      const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() }, actions: string[] = [];
+      const c = new RecoveryController({ ...defaults, mode: 'assist' }, action => actions.push(action));
+      c.request(agent, new AbortController().signal, true);
+      c.setMode(nextMode);
+      expect(actions).toEqual(['correction-deferred', 'correction-revoked']);
+      c.request(agent, new AbortController().signal, true);
+      expect(agent.cancel).toHaveBeenCalledTimes(nextMode === 'guard' ? 1 : 0);
+    }
+  });
   it('cannot intervene in observation mode or unverified hosts', () => {
     const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() };
     new RecoveryController(defaults, () => {}).request(agent, new AbortController().signal, true);

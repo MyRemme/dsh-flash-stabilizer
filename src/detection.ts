@@ -3,7 +3,7 @@ import type { Settings } from './config.js';
 export interface RepeatEvidence { method?: 'periodic' | 'phrase'; uncertainty?: 'changing-numbered-units' | 'changing-units'; period: number; repeats: number; coverage: number; novelty: number; score: number; confirmed: boolean; chars: number }
 
 /** Repeated short units can alternate with changing remarks, defeating exact periods. */
-export function phraseRepetition(text: string, minRepeats: number) {
+export function phraseRepetition(text: string, minRepeats: number, maxUnitLength = 24) {
   // Keep paths, file extensions and versions intact. Preserve offsets for the
   // distribution check by replacing separators with one character each.
   const normalized = text.replace(/\.(?=\s|$)|(?<=\s)\/(?=\s)/gu, '\n');
@@ -12,7 +12,7 @@ export function phraseRepetition(text: string, minRepeats: number) {
   })).filter(unit => unit.value.length > 0);
   const counts = new Map<string, number>();
   for (const { value } of units) {
-    if (value.length <= 24 && /\p{L}/u.test(value) && !/\p{N}/u.test(value)) counts.set(value, (counts.get(value) ?? 0) + 1);
+    if (value.length <= maxUnitLength && /\p{L}/u.test(value)) counts.set(value, (counts.get(value) ?? 0) + 1);
   }
   const common = [...counts].filter(([, count]) => count >= minRepeats).sort((a, b) => b[1] * b[0].length - a[1] * a[0].length).slice(0, 4);
   const values = new Set(common.map(([value]) => value));
@@ -24,20 +24,23 @@ export function phraseRepetition(text: string, minRepeats: number) {
   const repeatedChars = repeated.reduce((sum, unit) => sum + unit.value.replace(/\s/gu, '').length, 0);
   const coverage = repeated.length / Math.max(units.length, 1);
   // Require the repeated units throughout the window, not a quotation in one corner.
-  const distributed = [0, 1, 2].every(third => repeated.filter(unit => unit.start >= text.length * third / 3 && unit.start < text.length * (third + 1) / 3).length >= 3);
-  if (repeated.length < 24 || repeatedChars < 80 || repeatedChars / Math.max(chars, 1) < 0.35 || coverage < 0.7 || !distributed) return;
-  const numbered = units.filter(unit => /\p{N}/u.test(unit.value));
+  const minUnits = maxUnitLength > 24 ? Math.max(minRepeats, 12) : 24;
+  const minPerThird = maxUnitLength > 24 ? 2 : 3;
+  const distributed = [0, 1, 2].every(third => repeated.filter(unit => unit.start >= text.length * third / 3 && unit.start < text.length * (third + 1) / 3).length >= minPerThird);
+  if (repeated.length < minUnits || repeatedChars < (maxUnitLength > 24 ? 240 : 80) || repeatedChars / Math.max(chars, 1) < 0.35 || coverage < 0.7 || !distributed) return;
+  const numbered = units.filter(unit => !values.has(unit.value) && /\p{N}/u.test(unit.value));
   const distinctNumbered = new Set(numbered.map(unit => unit.value)).size;
-  const changingNumberedUnits = distinctNumbered >= 3 && numbered.length / units.length >= 0.15
-    || distinctNumbered >= 6 && numbered.length / units.length >= 0.1 && distinctNumbered / numbered.length >= 0.7;
+  const highRepeatCharShare = repeatedChars / Math.max(chars, 1) >= 0.88;
+  const changingNumberedUnits = !highRepeatCharShare && (distinctNumbered >= 3 && numbered.length / units.length >= 0.15
+    || distinctNumbered >= 6 && numbered.length / units.length >= 0.1 && distinctNumbered / numbered.length >= 0.7);
   // Fixed conclusions can dominate a checklist whose object names keep changing.
   // Judge the non-repeated units separately: overlapping windows hide their
   // novelty among common phrases. Require enough distinct units to exclude
   // clipped window edges and a rotating set of additional repeated phrases.
   const changing = units.filter(unit => !values.has(unit.value) && /[\p{L}\p{N}]/u.test(unit.value));
   const distinct = new Set(changing.map(unit => unit.value)).size;
-  const changingUnits = distinct >= 3 && changing.length / units.length >= 0.15 && distinct / changing.length >= 0.5
-    || distinct >= 6 && changing.length / units.length >= 0.1 && distinct / changing.length >= 0.7;
+  const changingUnits = !highRepeatCharShare && (distinct >= 3 && changing.length / units.length >= 0.15 && distinct / changing.length >= 0.5
+    || distinct >= 6 && changing.length / units.length >= 0.1 && distinct / changing.length >= 0.7);
   return { period: 0, repeats: repeated.length, coverage, changingNumberedUnits, changingUnits, singleLetter };
 }
 
@@ -101,13 +104,17 @@ export class RepeatDetector {
     const phraseNovelty = this.previousPhrase.size ? phraseFresh / Math.max(phraseGrams.size, 1) : 1;
     this.previousPhrase = phraseGrams;
     const repeat = this.total >= this.config.minChars ? periodicSuffix(this.buffer, this.config.minPeriod, this.config.maxPeriod, this.config.minRepeats) : { period: 0, repeats: 0, coverage: 0 };
-    const strong = repeat.coverage >= 0.85 && !codeLike(this.buffer);
+    const fenced = /^ {0,3}(?:`{3,}[^`\r\n]*|~{3,}[^\r\n]*)\r?$/m.test(this.buffer);
+    const strong = repeat.coverage >= 0.85 && (!codeLike(this.buffer) || (this.reasoning && !fenced && repeat.coverage >= 0.9 && repeat.repeats >= 12));
     // Confirmation requires fresh characters on distinct checks, never repeated checks of one buffer.
     const compatiblePeriod = this.lastConfirmedPeriod === 0 || repeat.period % this.lastConfirmedPeriod === 0 || this.lastConfirmedPeriod % Math.max(repeat.period, 1) === 0;
     const stable = strong && novelty <= 0.15;
     this.consecutive = stable && compatiblePeriod ? this.consecutive + 1 : stable ? 1 : 0;
     this.lastConfirmedPeriod = stable ? repeat.period : 0;
-    const phrase = this.reasoning && !codeLike(this.buffer.slice(-512)) ? phraseRepetition(this.buffer.slice(-512), this.config.minRepeats) : undefined;
+    const phrase = this.reasoning && !codeLike(this.buffer.slice(-512))
+      ? phraseRepetition(this.buffer.slice(-512), this.config.minRepeats)
+        ?? (this.total >= this.config.minChars && !strong && !codeLike(this.buffer.slice(-1024)) ? phraseRepetition(this.buffer.slice(-1024), this.config.minRepeats, 64) : undefined)
+      : undefined;
     const uncertainty = phrase?.changingNumberedUnits ? 'changing-numbered-units' : phrase?.changingUnits ? 'changing-units' : undefined;
     // Single-letter sentences need near-total coverage and stricter novelty;
     // the general periodic detector still excludes single-letter/data spam.

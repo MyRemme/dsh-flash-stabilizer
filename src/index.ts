@@ -1,3 +1,7 @@
+import { readFileSync, statSync } from 'node:fs';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { resolveSettings, Config, type Settings } from './config.js';
 import { compatibilityFor, detectHostVersion } from './compatibility.js';
 import { StreamMonitor } from './monitor.js';
@@ -20,7 +24,7 @@ export interface StabilizerAPI {
     confirmed: number; recoverySubmitted: number; events: ReturnType<MetricsStore['snapshot']>['events']; logging: ReturnType<MetricsStore['snapshot']>['logging'];
   };
   sessionStatus(sessionId: string): {
-    monitoring: boolean; mode: Settings['mode']; startedAt: string;
+    monitoring: boolean; sessionEnabled: boolean; mode: Settings['mode']; startedAt: string;
     coverage: 'waiting' | 'monitoring' | 'checked' | 'other-model' | 'auxiliary' | 'unavailable' | 'paused' | 'disabled';
     monitoredRequests: number; activeRequests: number; confirmed: number; toolWarnings: number; recoverySubmitted: number; cancelRequested: number;
     lastMonitoredAt: string | null; latestEvent: DiagnosticEvent | null; events: ReturnType<MetricsStore['forSession']>;
@@ -31,6 +35,7 @@ export interface StabilizerAPI {
   /** Owner UI only; excluded from status(), disk and export. */
   conversations(): ({ sessionId: string; sessionKey: string; tracked: boolean } & ReturnType<StabilizerAPI['sessionStatus']>)[];
   setMonitoring(enabled: boolean): void;
+  setMode(mode: 'observe' | 'assist' | 'guard'): Promise<ReturnType<StabilizerAPI['status']>>;
   modelScope(): ReturnType<ModelScopeStore['view']>;
   setModelScope(input: unknown): Promise<ReturnType<ModelScopeStore['view']>>;
   refreshModels(): Promise<ReturnType<ModelScopeStore['view']>>;
@@ -59,7 +64,23 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   const compatibility = compatibilityFor(config.hostVersion || detected || '');
   // Explicit version is an observation hint, never permission to unlock recovery.
   if (config.hostVersion && detected !== config.hostVersion) { compatibility.intervention = false; compatibility.guard = false; }
-  const effectiveMode = config.mode === 'auto' && !compatibility.intervention || config.mode === 'guard' && !compatibility.guard ? 'observe' : config.mode;
+  const modeFile = profile?.dir ? join(profile.dir, '.flash-stabilizer', 'mode.json') : undefined;
+  let configuredMode: Settings['mode'] = config.mode;
+  if (modeFile) {
+    try {
+      if (statSync(modeFile).size <= 65536) {
+        const saved = JSON.parse(readFileSync(modeFile, 'utf8')) as { mode?: unknown };
+        if (saved && typeof saved === 'object' && !Array.isArray(saved) && Object.keys(saved).length === 1 && ['observe', 'assist', 'guard'].includes(saved.mode as string)) {
+          configuredMode = saved.mode as Settings['mode'];
+        }
+      }
+    } catch { /* Optional saved mode. */ }
+  }
+  const modeFor = (requested: Settings['mode']): Settings['mode'] =>
+    requested === 'auto' ? (compatibility.intervention ? 'auto' : compatibility.guard ? 'guard' : 'observe')
+    : requested === 'guard' && !compatibility.guard ? 'observe' : requested;
+  let effectiveMode = modeFor(configuredMode);
+  let modeSaving: Promise<unknown> = Promise.resolve();
   const states = new Map<string, SessionState>();
   const disabledSessions = new Set<string>(config.disabledSessions);
   let disposed = false;
@@ -248,8 +269,9 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     if (!selected(route ?? {})) return;
     state.toolResults++; state.lastToolAt = new Date().toISOString();
     const evidence = state.progress.record(exec, result);
-    if (evidence.repeated && evidence.count === config.toolRepeatLimit) {
-      report({ kind: 'tool-repeat', session: exec.agent.id, score: evidence.failed ? 85 : 70, confirmed: false, chars: 0,
+    if (evidence.repeated && evidence.count % config.toolRepeatLimit === 0) {
+      const extra = Math.min(10, Math.floor((evidence.count - config.toolRepeatLimit) / config.toolRepeatLimit) * 5);
+      report({ kind: 'tool-repeat', session: exec.agent.id, score: (evidence.failed ? 85 : 70) + extra, confirmed: false, chars: 0,
         repeats: evidence.count, turn: state.turn, step: state.step });
       // Repetition of a tool is observation only; never skip, deny, or replay it.
     }
@@ -278,7 +300,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       const events = metrics.forSession(sessionId);
       const retained = (kind: string, action?: string) => events.filter(event => event.kind === kind && (action ? event.action === action : event.confirmed)).length;
       return {
-        monitoring: monitoring && !disposed, mode: effectiveMode, startedAt,
+        monitoring: monitoring && !disposed, sessionEnabled: !disabledSessions.has(sessionId), mode: effectiveMode, startedAt,
         coverage: !monitoring || disposed ? 'paused' : disabledSessions.has(sessionId) ? 'disabled'
           : state?.request ? 'monitoring' : state?.coverage ?? 'waiting',
         monitoredRequests: state?.monitoredRequests ?? 0, activeRequests: state?.request ? 1 : 0,
@@ -310,6 +332,27 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
         recovery.setEnabled(state.agent, enabled && state.enabled && selected(state.request?.route ?? state.route ?? {}));
       }
     }),
+    setMode: nextMode => {
+      if (!['observe', 'assist', 'guard'].includes(nextMode)) return Promise.reject(new TypeError('invalid mode'));
+      if (nextMode === 'guard' && !compatibility.guard) return Promise.reject(new Error('guard mode unavailable'));
+      const operation = modeSaving.catch(() => {}).then(async () => {
+        if (disposed) throw new Error('settings unavailable');
+        if (modeFile) {
+          const temporary = `${modeFile}.${randomUUID()}.tmp`;
+          await mkdir(dirname(modeFile), { recursive: true });
+          try {
+            await writeFile(temporary, JSON.stringify({ mode: nextMode }, null, 2) + '\n', { mode: 0o600 });
+            await rename(temporary, modeFile);
+          } finally { await unlink(temporary).catch(() => {}); }
+        }
+        configuredMode = nextMode;
+        effectiveMode = modeFor(nextMode);
+        recovery.setMode(effectiveMode);
+        return api.status();
+      });
+      modeSaving = operation;
+      return operation;
+    },
     modelScope: () => modelScope.view(),
     setModelScope: input => modelScope.set(input),
     refreshModels: () => modelScope.refresh((ctx.get?.('llm', false) ?? ctx.llm) as ModelCatalog | undefined),
@@ -338,8 +381,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       && api.status().activeRequests === 0;
   });
   registerUI(ctx, api, updates);
-  if (config.mode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过所选干预模式验证，已使用观察模式。' : 'Flash Stabilizer: selected intervention is not verified; using observation mode.');
+  if (configuredMode !== effectiveMode) warn(config.language === 'zh' ? 'Flash Stabilizer：此版本尚未通过所选干预模式验证，已使用观察模式。' : 'Flash Stabilizer: selected intervention is not verified; using observation mode.');
   metrics.record({ kind: 'compatibility', session: '', score: 0, confirmed: false, chars: 0, action: compatibility.reason });
   try { ctx.logger?.info(`flash-stabilizer: DSH ${compatibility.version}; ${compatibility.adapter}; ${effectiveMode}; ${compatibility.reason}`); } catch { /* Optional logger. */ }
-  ctx.effect(() => async () => { disposed = true; recovery.dispose(); states.clear(); await modelScope.close(); await metrics.close(); }, 'flash-stabilizer: stop and drain');
+  ctx.effect(() => async () => { disposed = true; recovery.dispose(); states.clear(); await modeSaving.catch(() => {}); await modelScope.close(); await metrics.close(); }, 'flash-stabilizer: stop and drain');
 }

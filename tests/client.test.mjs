@@ -389,3 +389,38 @@ it('shows the current request while keeping earlier incidents in conversation de
   await act(async () => { document.querySelector('.fs-dock-button').click(); });
   expect(document.querySelector('[role="dialog"]').textContent).toContain('确认输出重复');
 });
+it('switches mode, toggles per-session monitoring, alerts on tool-repeat, and pauses polling when hidden', async () => {
+  const data = { ...baseline(), compatibility: { version: '0.2.2-rc.1', guard: true } };
+  const conv = { ...sessionData(), sessionId: 'a', sessionKey: 'key-a', sessionEnabled: true, tracked: true };
+  let snapshotCalls = 0;
+  const call = vi.fn(async (_channel, method, payload) => {
+    if (method === 'snapshot') snapshotCalls++;
+    if (method === 'setMode') { data.mode = payload.mode; return { ok: true, value: structuredClone(data) }; }
+    if (method === 'setSessionEnabled') {
+      conv.sessionEnabled = payload.enabled;
+      conv.coverage = payload.enabled ? 'waiting' : 'disabled';
+      return { ok: true, value: structuredClone(conv) };
+    }
+    if (method === 'conversations') return { ok: true, value: [structuredClone(conv)] };
+    if (method === 'session') return { ok: true, value: structuredClone(conv) };
+    return { ok: true, value: structuredClone(data) };
+  });
+  await mount(call, 'a', {}, true);
+  await act(async () => { document.querySelector('input[name="flash-mode"][value="guard"]').click(); });
+  expect(call).toHaveBeenCalledWith('/flash-stabilizer', 'setMode', { mode: 'guard' }, expect.any(AbortSignal));
+  expect(document.body.textContent).toContain('防护停止');
+  await act(async () => { button('暂停此对话监控').click(); });
+  expect(call).toHaveBeenCalledWith('/flash-stabilizer', 'setSessionEnabled', { sessionId: 'a', enabled: false }, expect.any(AbortSignal));
+  expect(document.body.textContent).toContain('此对话未启用');
+  await act(async () => { button('启用此对话监控').click(); });
+  expect(call).toHaveBeenCalledWith('/flash-stabilizer', 'setSessionEnabled', { sessionId: 'a', enabled: true }, expect.any(AbortSignal));
+  data.events = [{ kind: 'tool-repeat', repeats: 4, score: 85, session: 'key-a', time: '2026-11-14T10:00:00Z' }];
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+  const beforeHidden = snapshotCalls;
+  await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+  expect(snapshotCalls).toBe(beforeHidden);
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  await act(async () => { document.dispatchEvent(new dom.window.Event('visibilitychange')); });
+  expect(snapshotCalls).toBeGreaterThan(beforeHidden);
+  expect(document.querySelector('[role="alert"]').textContent).toContain('工具重复告警');
+});

@@ -65,6 +65,27 @@ describe('repeat evidence', () => {
     expect(events.find(e => e.confirmed)).toMatchObject({ method: 'phrase' });
     expect(events.find(e => e.confirmed)!.chars).toBeLessThan(1536);
   });
+  it.each([1, 73, 4096])('detects intermittent reasoning loops with fixed numbers or medium clauses (%i)', size => {
+    for (const unit of [
+      (i: number) => `步骤 1 已确认。核对 v2 接口。\n${i % 9 === 0 ? `（备注）再核对一次。\n` : ''}`,
+      (i: number) => `现在需要继续检查当前模块的依赖关系并确认下一步必要操作。\n${i % 8 === 0 ? `（记录 ${i}）换一个角度。\n` : ''}`,
+    ]) {
+      const events: { confirmed: boolean; method?: string }[] = [];
+      const monitor = new StreamMonitor(defaults, e => events.push(e));
+      chunks(Array.from({ length: 160 }, (_, i) => unit(i)).join(''), size).forEach(c => monitor.push(c));
+      expect(events.find(e => e.confirmed)).toMatchObject({ method: 'phrase' });
+    }
+  });
+  it('detects unfenced exact periodic reasoning loops with assignment or comparison symbols', () => {
+    const events: { confirmed: boolean; method?: string }[] = [];
+    const monitor = new StreamMonitor(defaults, e => events.push(e));
+    chunks('验证 x = 1; 结论 y = 2; 继续推导。'.repeat(200), 73, 'reasoning').forEach(c => monitor.push(c));
+    expect(events.find(e => e.confirmed)).toMatchObject({ method: 'periodic' });
+    const bodyEvents: { confirmed: boolean }[] = [];
+    const bodyMonitor = new StreamMonitor(defaults, e => bodyEvents.push(e));
+    chunks('const x = 1; const y = 2;\n'.repeat(200), 73, 'text').forEach(c => bodyMonitor.push(c));
+    expect(bodyEvents.some(e => e.confirmed)).toBe(false);
+  });
   it('keeps the short-phrase detector out of intentional body repetition and changing data', () => {
     for (const [type, text] of [
       ['text', 'Repeat. Inspect.\n'.repeat(75)],

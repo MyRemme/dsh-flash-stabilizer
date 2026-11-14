@@ -8,7 +8,7 @@ const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url
 const notesPath = process.argv[2] ?? `artifacts/local-review-notes/release-draft-${pkg.version}.zh-CN.md`;
 const notes = (await readFile(resolve(notesPath), 'utf8')).trim();
 assert.ok(notes.startsWith(`# DSH Flash Stabilizer ${pkg.version} - `), 'Write version-specific Chinese release notes before publishing');
-const title = notes.split('\n', 1)[0].slice(2);
+const title = notes.split(/\r?\n/, 1)[0].slice(2);
 const tag = `v${pkg.version}`, archive = resolve(`artifacts/${pkg.name}-${pkg.version}.tgz`);
 const data = await readFile(archive);
 const entries = new Map();

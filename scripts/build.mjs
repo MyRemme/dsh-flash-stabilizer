@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const root = new URL('../', import.meta.url);
 const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 const entry = `runtime-${manifest.version}`;
-assert.ok((await readFile(new URL('cordis.patch.yml', root), 'utf8')).includes(`name: ./dist/${entry}.js\n`));
+assert.ok((await readFile(new URL('cordis.patch.yml', root), 'utf8')).replace(/\r\n/g, '\n').includes(`name: ./dist/${entry}.js\n`));
 for (const file of await readdir(new URL('dist/', root))) {
   if (/^runtime-\d+\.\d+\.\d+\.js(?:\.map)?$/.test(file)) await unlink(new URL(`dist/${file}`, root));
 }

@@ -35,6 +35,19 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI, updates: Update
         api.setMonitoring(enabled);
         return { ok: true, value: api.status() };
       }
+      if (endpoint === 'setMode') {
+        const mode = (payload as { mode?: unknown }).mode;
+        if (keys.length !== 1 || !['observe', 'assist', 'guard'].includes(mode as string)) return fail('BAD_REQUEST', 'Expected valid mode');
+        return api.setMode(mode as 'observe' | 'assist' | 'guard').then(value => ({ ok: true, value }), () => fail('MODE_FAILED', 'Could not save mode'));
+      }
+      if (endpoint === 'setSessionEnabled') {
+        const { sessionId, enabled } = payload as { sessionId?: unknown; enabled?: unknown };
+        if (keys.length !== 2 || typeof sessionId !== 'string' || !sessionId.trim() || sessionId.length > 1024 || typeof enabled !== 'boolean') {
+          return fail('BAD_REQUEST', 'Expected sessionId and enabled');
+        }
+        api.setSessionEnabled(sessionId, enabled);
+        return { ok: true, value: api.sessionStatus(sessionId) };
+      }
       if (keys.length) return fail('BAD_REQUEST', 'Expected empty payload');
       if (endpoint === 'modelScope') return { ok: true, value: api.modelScope() };
       if (endpoint === 'refreshModels') return api.refreshModels().then(value => ({ ok: true, value }), () => fail('CATALOG_FAILED', 'Could not read models'));

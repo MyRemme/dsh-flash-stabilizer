@@ -1,10 +1,17 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { apply, type StabilizerAPI } from '../src/index.js';
 import type { ConnectionService, HostContext } from '../src/types.js';
 import { FakeHost, chunks, makeAgent, repeated, stream } from './helpers.js';
 
-const hosts: FakeHost[] = [];
-afterEach(async () => { for (const host of hosts.splice(0)) await host.close(); vi.useRealTimers(); });
+const hosts: FakeHost[] = [], roots: string[] = [];
+afterEach(async () => {
+  for (const host of hosts.splice(0)) await host.close();
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+  vi.useRealTimers();
+});
 function setup() {
   const host = new FakeHost(); hosts.push(host);
   let handler: Parameters<ConnectionService['rpc']['handle']>[1];
@@ -180,4 +187,47 @@ it('does not report a fully checked request when monitoring was paused midstream
   api.setMonitoring(false); api.setMonitoring(true);
   await iterator.next(); await iterator.next();
   expect(api.sessionStatus('a').coverage).toBe('unavailable');
+});
+it('validates and persists mode changes, degrades auto to guard on verified hosts, and exposes setSessionEnabled', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'flash-mode-')); roots.push(directory);
+  const host = new FakeHost(); hosts.push(host);
+  host.values.set('profileContext', { dir: directory });
+  let handler!: Parameters<ConnectionService['rpc']['handle']>[1];
+  const connection = { rpc: { handle: (_channel: string, fn: typeof handler) => { handler = fn; } } };
+  (host as HostContext).inject = (names, callback) => {
+    if (names.includes('pluginManager')) return;
+    callback(Object.assign(host, { connection }));
+  };
+  apply(host, { hostVersion: '0.2.2-rc.1', mode: 'auto' });
+  const api = host.values.get('flashStabilizer') as StabilizerAPI;
+  expect(api.status().mode).toBe('guard');
+  const call = (endpoint: string, payload: unknown = {}, kind = 'owner') =>
+    handler(endpoint, payload, new AbortController().signal, { principal: { kind } }) as any;
+  expect(call('setMode', { mode: 'assist' }, 'guest').error?.code).toBe('FORBIDDEN');
+  for (const bad of [{}, { mode: 'auto' }, { mode: 'invalid' }, { mode: 'guard', extra: 1 }]) {
+    expect(call('setMode', bad).error?.code).toBe('BAD_REQUEST');
+  }
+  expect((await call('setMode', { mode: 'assist' })).value.mode).toBe('assist');
+  expect(call('setSessionEnabled', { sessionId: 's1', enabled: false }, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('setSessionEnabled', { sessionId: '', enabled: false }).error?.code).toBe('BAD_REQUEST');
+  expect(call('setSessionEnabled', { sessionId: 's1', enabled: false }).value).toMatchObject({ sessionEnabled: false, coverage: 'disabled' });
+  expect(call('setSessionEnabled', { sessionId: 's1', enabled: true }).value).toMatchObject({ sessionEnabled: true, coverage: 'waiting' });
+  const reloaded = new FakeHost(); hosts.push(reloaded);
+  reloaded.values.set('profileContext', { dir: directory });
+  apply(reloaded, { hostVersion: '0.2.2-rc.1', mode: 'observe' });
+  expect((reloaded.values.get('flashStabilizer') as StabilizerAPI).status().mode).toBe('assist');
+  const unverified = new FakeHost(); hosts.push(unverified);
+  apply(unverified, { hostVersion: '9.9.9', mode: 'auto' });
+  const unverifiedApi = unverified.values.get('flashStabilizer') as StabilizerAPI;
+  expect(unverifiedApi.status().mode).toBe('observe');
+  await expect(unverifiedApi.setMode('guard')).rejects.toThrow('guard mode unavailable');
+});
+it('emits milestone warnings on continued tool repetition', async () => {
+  const { host, api } = setup(), agent = makeAgent('tools');
+  await stream(host, agent, chunks('normal'), false);
+  const exec = { agent, name: 'run', arguments: { cmd: 'test' } }, res = { isError: true, content: 'failed' };
+  for (let i = 0; i < 8; i++) host.emit('tools/result', exec, res);
+  const events = api.sessionStatus('tools').events.filter(e => e.kind === 'tool-repeat');
+  expect(events.map(e => e.repeats)).toEqual([8, 4]);
+  expect(events[0]!.score).toBeGreaterThan(events[1]!.score);
 });

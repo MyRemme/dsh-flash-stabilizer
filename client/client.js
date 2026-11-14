@@ -84,8 +84,8 @@ window.__ModuleLoader__.load({
         } finally { clearTimeout(timer); requests.delete(controller); }
       }
       function accept(data) {
-        const event = data.events.find(e => e.kind === 'internal-error' || (e.kind === 'stream-repeat' && (e.confirmed || e.uncertainty)) || (e.kind === 'recovery' && e.action === 'recovery-submitted'));
-        const id = event ? `${event.session}/${event.time}/${event.kind}/${event.contentType || ''}/${event.action || ''}` : '';
+        const event = data.events.find(e => e.kind === 'internal-error' || e.kind === 'tool-repeat' || (e.kind === 'stream-repeat' && (e.confirmed || e.uncertainty)) || (e.kind === 'recovery' && e.action === 'recovery-submitted'));
+        const id = event ? `${event.session}/${event.time}/${event.kind}/${event.contentType || ''}/${event.action || ''}/${event.repeats || ''}` : '';
         const patch = { data, error: '', updatedAt: new Date().toISOString() };
         if (id && id !== lastNotice) { patch.toast = event; lastNotice = id; }
         publish(patch);
@@ -153,7 +153,10 @@ window.__ModuleLoader__.load({
         try {
           const value = await call(endpoint, payload);
           if (disposed) return;
-          if (endpoint === 'setMonitoring') accept(value);
+          if (endpoint === 'setMonitoring' || endpoint === 'setMode') accept(value);
+          if (endpoint === 'setSessionEnabled' && payload?.sessionId && watched.has(payload.sessionId)) {
+            publish({ sessions: { ...state.sessions, [payload.sessionId]: value }, sessionErrors: { ...state.sessionErrors, [payload.sessionId]: '' } });
+          }
           if (endpoint === 'setModelScope') publish({ modelScope: value, scopeError: '' });
           if (endpoint === 'selfTest') publish({ test: value.passed && value.modelRequests === 0 ? '离线自检通过，未调用模型，未计入真实告警。' : '离线自检未通过。' });
           if (endpoint === 'export') {
@@ -165,12 +168,14 @@ window.__ModuleLoader__.load({
         } catch { publish(endpoint === 'setModelScope' ? { scopeError: '范围保存失败，原设置仍然生效。请重试。' } : { error: '操作未完成，请重试。' }); }
         finally { generation++; publish({ busy: false }); void refresh(); void refreshScope(); refreshConversations(); for (const id of watched.keys()) refreshSession(id); }
       }
-      const timer = setInterval(poll, 2000); poll();
+      const onVisibility = () => { if (document.visibilityState !== 'hidden' && !disposed) void poll(); };
+      document.addEventListener?.('visibilitychange', onVisibility);
+      const timer = setInterval(() => { if (document.visibilityState !== 'hidden') void poll(); }, 2000); poll();
       return {
         subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, snapshot: () => state, refresh: poll, refreshModels: () => refreshScope(true), action, updateAction,
         watch: id => { watched.set(id, (watched.get(id) || 0) + 1); refreshSession(id); return () => { const count = watched.get(id) - 1; if (count) watched.set(id, count); else { watched.delete(id); const { [id]: _old, ...sessions } = state.sessions; const { [id]: _error, ...sessionErrors } = state.sessionErrors; publish({ sessions, sessionErrors }); } }; },
         dismiss: () => publish({ toast: null }),
-        dispose: () => { disposed = true; clearInterval(timer); for (const request of requests) request.abort(); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); watched.clear(); listeners.clear(); },
+        dispose: () => { disposed = true; clearInterval(timer); document.removeEventListener?.('visibilitychange', onVisibility); for (const request of requests) request.abort(); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); watched.clear(); listeners.clear(); },
       };
     }
     function apply(ctx) {
@@ -223,13 +228,16 @@ window.__ModuleLoader__.load({
           data && h(React.Fragment, null,
             h('dl', { className: 'fs-stats' }, stat('已监控请求', data.monitoredRequests), stat('当前请求', data.activeRequests), stat('确认重复', data.confirmed), stat('已提交纠正', data.recoverySubmitted)),
             h('section', { className: 'fs-section' }, h('div', { className: 'fs-section-head' }, h('h3', null, '运行状态'), status(label, online && data.monitoring ? 'on' : 'off')),
+              h('fieldset', { className: 'fs-model-modes', disabled: !online || state.busy, 'aria-label': '处理模式选择' },
+                ...[['observe', '仅观察'], ['guard', '防护停止'], ['assist', '有限纠正']].map(([key, text]) => h('label', { key },
+                  h('input', { type: 'radio', name: 'flash-mode', value: key, checked: data.mode === key, disabled: !online || state.busy || (key === 'guard' && data.compatibility?.guard === false), onChange: () => controller.action('setMode', { mode: key }) }), text))),
               h('dl', { className: 'fs-facts' }, fact('处理模式', modeName(data.mode)), fact('检测后动作', data.mode === 'guard' ? '确认推理重复后请求停止本轮' : data.mode === 'assist' ? '回合结束后可提交纠正' : '显示告警，不中断输出'), fact('最近监控', time(data.lastMonitoredAt)), fact('磁盘日志', !data.logging.enabled ? '未开启' : data.logging.healthy ? '写入正常' : '写入失败'))),
             h('section', { className: 'fs-section', 'aria-label': '逐对话实时监控' }, h('div', { className: 'fs-section-head' }, h('h3', null, '对话实时监控'), h('span', { className: 'fs-muted' }, '每 2 秒同步')),
               (state.error || state.conversationError) && h('p', { className: 'fs-error' }, '连接中断，以下为上次同步数据，不能判断当前模型状态。'),
-              h('div', { className: 'fs-conversations' }, state.conversations.length ? state.conversations.map(item => { const current = state.error || state.conversationError ? { label: '状态已过期 · 等待重新连接', tone: 'off' } : health(item); return h('article', { className: 'fs-conversation', key: item.sessionKey },
+              h('div', { className: 'fs-conversations' }, state.conversations.length ? state.conversations.map(item => { const current = state.error || state.conversationError ? { label: '状态已过期 · 等待重新连接', tone: 'off' } : health(item); const pausedSession = item.sessionEnabled === false || item.coverage === 'disabled'; return h('article', { className: 'fs-conversation', key: item.sessionKey },
                 h('div', { className: 'fs-conversation-main' }, h('div', { className: 'fs-conversation-title' }, conversationName(item)), status(current.label, current.tone), h(Live, { data: item }),
                   h('div', { className: 'fs-live' }, `${item.counterScope === 'retained-events' ? '保留事件中' : '累计'}确认重复 ${item.confirmed} 次 · 已提交纠正 ${item.recoverySubmitted} 次 · ${item.cancelRequested ? `请求中断 ${item.cancelRequested} 次` : '未拦截、未中断'}`), !item.tracked && h('p', { className: 'fs-muted' }, '会话已不在实时跟踪中，仅显示保留事件。')),
-                h('div', { className: 'fs-tools' }, command('查看此对话记录', () => setFilter(item.sessionKey), UI.IconInfoOutlineRegular, false), command('打开对话', () => openConversation(item), null, !service('uiWorkspace')?.openSession))); }) : h('div', { className: 'fs-empty' }, '尚无已跟踪的对话；下一次匹配的模型请求开始后自动显示。')),
+                h('div', { className: 'fs-tools' }, command(pausedSession ? '启用此对话监控' : '暂停此对话监控', () => controller.action('setSessionEnabled', { sessionId: item.sessionId, enabled: pausedSession }), null, state.busy), command('查看此对话记录', () => setFilter(item.sessionKey), UI.IconInfoOutlineRegular, false), command('打开对话', () => openConversation(item), null, !service('uiWorkspace')?.openSession))); }) : h('div', { className: 'fs-empty' }, '尚无已跟踪的对话；下一次匹配的模型请求开始后自动显示。')),
               h('p', { className: 'fs-health-note' }, '实时观察已收到的输出；“暂未发现循环”不保证后续不会重复，也不代表任务结果正确。长时间没有输出不直接判定为低熵循环。')),
             h('section', { className: 'fs-section' }, h('div', { className: 'fs-section-head' }, h('h3', null, '检测与处理'), h('span', { className: 'fs-muted' }, `${events.length} 条记录`)),
               filter && command('显示全部对话', () => setFilter(''), UI.IconCloseOutlineRegular, false),
@@ -315,7 +323,7 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'fs-dock', 'data-composer-stat': 'flash-stabilizer' },
           h('button', { type: 'button', className: 'fs-dock-button', ref: anchor, 'data-tone': tone, title: 'Flash 防空转：' + label, 'aria-label': 'Flash 防空转：' + label, 'aria-expanded': open, 'aria-controls': open ? dialogId : undefined, 'aria-haspopup': 'dialog', onClick: () => setOpen(value => !value) }, icon(tone === 'warn' ? UI.IconWarningOutlineRegular : UI.IconShieldOutlineRegular, 12), h('span', { role: 'status' }, 'Flash · ' + label)),
           open && createPortal(h('section', { id: dialogId, role: 'dialog', 'aria-label': '此对话的防空转记录', className: 'fs-dialog', ref: dialog, style: position },
-            h('div', { className: 'fs-head' }, h('h3', null, '此对话 · Flash 防空转'), command('关闭', () => { setOpen(false); anchor.current?.focus(); }, UI.IconCloseOutlineRegular, false, true)),
+            h('div', { className: 'fs-head' }, h('h3', null, '此对话 · Flash 防空转'), h('div', { className: 'fs-tools' }, data && command(data.sessionEnabled === false || data.coverage === 'disabled' ? '启用此对话监控' : '暂停此对话监控', () => controller.action('setSessionEnabled', { sessionId, enabled: data.sessionEnabled === false || data.coverage === 'disabled' }), null, state.busy), command('关闭', () => { setOpen(false); anchor.current?.focus(); }, UI.IconCloseOutlineRegular, false, true))),
             error ? h('p', { className: 'fs-error' }, error) : data && h(React.Fragment, null,
               h('p', { className: 'fs-muted' }, label), h('dl', { className: 'fs-stats' }, stat('已监控', data.monitoredRequests), stat('确认重复', data.confirmed), stat('请求中断', data.cancelRequested), stat('已提交纠正', data.recoverySubmitted)),
               h(Live, { data }),
