@@ -43,8 +43,19 @@ const release = await request(`${base}/releases`, { method: 'POST', headers: { '
   body: `${notes}\n\n## 安装包校验\n\nSHA-256（${pkg.name}-${pkg.version}.tgz）：\n\n\`\`\`text\n${sha256}\n\`\`\`\n`,
 }) });
 const upload = release.upload_url.replace(/\{.*$/, '');
+let assetId;
 for (const [name, bytes, type] of [[`${pkg.name}-${pkg.version}.tgz`, data, 'application/gzip'], ['checksums.sha256', sums, 'text/plain']]) {
-  await request(`${upload}?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': type }, body: bytes });
+  const asset = await request(`${upload}?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': type }, body: bytes });
+  if (name.endsWith('.tgz')) assetId = asset.id;
 }
+assert.ok(Number.isSafeInteger(assetId) && assetId > 0);
+const metadata = Buffer.from(JSON.stringify({ schemaVersion: 1, version: pkg.version,
+  name: `${pkg.name}-${pkg.version}.tgz`, size: data.length, sha256, assetId }, null, 2) + '\n');
+await writeFile(resolve('artifacts/update.json'), metadata);
+await request(`${upload}?name=update.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: metadata });
 const published = await request(`${base}/releases/${release.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft: false }) });
-console.log(JSON.stringify({ published: true, private: repository.private, version: pkg.version, url: published.html_url, sha256 }));
+// Only advance the stable feed after all assets are uploaded and publicly released.
+const feed = await request(`${base}/contents/updates/stable.json?ref=main`);
+const stable = await request(`${base}/contents/updates/stable.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: `chore: publish stable update feed for ${tag}`, branch: 'main', sha: feed.sha, content: metadata.toString('base64') }) });
+console.log(JSON.stringify({ published: true, private: repository.private, version: pkg.version, url: published.html_url, sha256, stableFeedCommit: stable.commit.sha }));

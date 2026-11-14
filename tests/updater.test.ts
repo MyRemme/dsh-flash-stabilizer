@@ -1,10 +1,15 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { create } from 'tar';
-import { releaseCandidate, Updater, validateArchive } from '../src/updater.js';
+import { manifestCandidate, releaseCandidate, Updater, validateArchive } from '../src/updater.js';
+
+vi.mock('node:fs/promises', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, rename: vi.fn(actual.rename) };
+});
 
 const roots: string[] = [], updaters: Updater[] = [];
 function deferred<T>() {
@@ -31,12 +36,133 @@ async function setup(options: { busy?: boolean; checksum?: boolean; fail?: boole
   if (options.checksum) data.release.assets[0]!.digest = 'sha256:' + '0'.repeat(64);
   const transport = vi.fn<typeof fetch>(async (url) => String(url).endsWith('/latest')
     ? new Response(JSON.stringify(data.release)) : new Response(new Uint8Array(data.buffer)));
+  const publicTransport = vi.fn<typeof fetch>(async () => new Response(null, { status: 404 }));
   const installBundle = vi.fn(async (_spec: string) => ({ application: options.fail ? 'failed' : 'restart-required', version: '0.1.8' }));
   const updater = new Updater({ directory: data.directory, hostVersion: '0.2.1-rc.2', manager: { installBundle }, idle: options.idleProbe ?? (() => idle),
-    fetch: transport, schedule: false, currentVersion: '0.1.7' });
+    fetch: (url, options) => String(url).endsWith('/stable.json') ? publicTransport(url, options) : transport(url, options), schedule: false, currentVersion: '0.1.7' });
   updaters.push(updater); await updater.start();
-  return { ...data, updater, transport, installBundle, idle: (value: boolean) => { idle = value; } };
+  return { ...data, updater, transport, publicTransport, installBundle, idle: (value: boolean) => { idle = value; } };
 }
+function publicManifest(buffer: Buffer, changes: Record<string, unknown> = {}) {
+  return { schemaVersion: 1, version: '0.1.8', name: 'dsh-flash-stabilizer-0.1.8.tgz', size: buffer.length,
+    sha256: createHash('sha256').update(buffer).digest('hex'), ...changes };
+}
+it.skipIf(process.platform !== 'win32')('retries transient Windows locks while saving update state atomically', async () => {
+  const { updater, directory } = await setup();
+  vi.mocked(rename).mockRejectedValueOnce(Object.assign(new Error('Destination open'), { code: 'EPERM' }));
+  expect((await updater.check()).phase).toBe('available');
+  expect(JSON.parse(await readFile(join(directory, '.flash-stabilizer/updates/state.json'), 'utf8')).phase).toBe('available');
+});
+it('checks and installs from public Release assets without using the REST API quota', async () => {
+  const { updater, publicTransport, transport, buffer, installBundle } = await setup();
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer))));
+  expect((await updater.check()).phase).toBe('available');
+  expect(transport).not.toHaveBeenCalled();
+  updater.install(); await settled(updater);
+  expect(updater.status()).toMatchObject({ phase: 'restart-required', error: null });
+  expect(transport.mock.calls.map(([url]) => String(url))).toEqual([
+    'https://github.com/MyRemme/dsh-flash-stabilizer/releases/download/v0.1.8/dsh-flash-stabilizer-0.1.8.tgz',
+  ]);
+  expect(installBundle).toHaveBeenCalledTimes(1);
+});
+it('follows only repository asset and signed-download redirects without credentials', async () => {
+  const { updater, publicTransport, transport, buffer } = await setup();
+  publicTransport.mockImplementation(async () => new Response(null, { status: 302,
+    headers: { location: 'https://github.com/MyRemme/dsh-flash-stabilizer/releases/download/v0.1.8/update.json' } }));
+  transport.mockImplementation(async (url, options) => {
+    expect(new Headers(options?.headers).has('Authorization')).toBe(false);
+    if (String(url).endsWith('/update.json')) return new Response(null, { status: 302,
+      headers: { location: 'https://release-assets.githubusercontent.com/fixture-manifest' } });
+    expect(options?.headers).toBeUndefined();
+    return new Response(JSON.stringify(publicManifest(buffer)));
+  });
+  expect((await updater.check()).phase).toBe('available');
+  expect(transport).toHaveBeenCalledTimes(2);
+});
+it.each([403, 429])('recovers from REST HTTP %i via the public manifest and respects REST backoff', async status => {
+  const { updater, publicTransport, transport, buffer } = await setup();
+  transport.mockImplementation(async () => new Response(null, { status, headers: {
+    'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.ceil(Date.now() / 1000) + 3600),
+  } }));
+  expect((await updater.check()).error).toBe('github-denied');
+  // Retrying a legacy release must not keep hitting the exhausted API.
+  await updater.check(); expect(transport).toHaveBeenCalledTimes(1);
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer))));
+  expect(await updater.check()).toMatchObject({ phase: 'available', latestVersion: '0.1.8', error: null });
+  expect(transport).toHaveBeenCalledTimes(1);
+});
+it('coalesces concurrent checks and reuses a recent successful result on repeated clicks', async () => {
+  const { updater, publicTransport, transport } = await setup();
+  const started = deferred<void>(), result = deferred<Response>();
+  transport.mockImplementation(async () => { started.resolve(); return result.promise; });
+  const first = updater.check(); await started.promise;
+  expect(updater.check()).toBe(first);
+  result.resolve(new Response(JSON.stringify({ tag_name: 'v0.1.7', assets: [] })));
+  expect(await first).toMatchObject({ phase: 'current', error: null });
+  await updater.check(); await updater.check();
+  expect(publicTransport).toHaveBeenCalledTimes(1); expect(transport).toHaveBeenCalledTimes(1);
+});
+it.each([
+  { schemaVersion: 2 }, { version: '0.1.8-beta.1' }, { name: '../other.tgz' }, { size: 0 },
+  { size: 33 * 1024 * 1024 }, { sha256: 'invalid' }, { assetId: -1 },
+])('rejects malformed public metadata without bypassing validation: %j', async changes => {
+  const { updater, publicTransport, transport, buffer, installBundle } = await setup();
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer, changes))));
+  expect((await updater.check()).error).toBe('invalid-release');
+  expect(transport).not.toHaveBeenCalled(); expect(installBundle).not.toHaveBeenCalled();
+});
+it('rejects invalid JSON, foreign redirects and redirect loops in public metadata', async () => {
+  const { updater, publicTransport, transport } = await setup();
+  publicTransport.mockImplementationOnce(async () => new Response('{'));
+  expect((await updater.check()).error).toBe('invalid-release');
+  publicTransport.mockImplementationOnce(async () => new Response(null, { status: 302, headers: { location: 'https://untrusted.invalid/update.json' } }));
+  expect((await updater.check()).error).toBe('invalid-redirect');
+  publicTransport.mockImplementation(async () => new Response(null, { status: 302,
+    headers: { location: 'https://github.com/MyRemme/dsh-flash-stabilizer/releases/download/v0.1.8/stable.json' } }));
+  expect((await updater.check()).error).toBe('invalid-redirect');
+  expect(transport).not.toHaveBeenCalled();
+});
+it('checks public archive integrity before installation and enforces the metadata size cap', async () => {
+  const { updater, publicTransport, transport, buffer, installBundle } = await setup();
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer))));
+  await updater.check(); transport.mockImplementation(async () => new Response('corrupted archive'));
+  updater.install(); await settled(updater);
+  expect(updater.status().error).toBe('checksum-failed'); expect(installBundle).not.toHaveBeenCalled();
+  publicTransport.mockImplementation(async () => new Response(' '.repeat(16 * 1024 + 1)));
+  expect((await updater.check()).error).toBe('download-too-large');
+});
+it('recognizes the installed version from a valid public manifest', async () => {
+  const { buffer } = await fixture();
+  expect(manifestCandidate(publicManifest(buffer), '0.1.8')).toBeNull();
+  expect(manifestCandidate(publicManifest(buffer), '0.1.9')).toBeNull();
+});
+it('checks again after the short cache expires and can enable automatic installation from cached metadata', async () => {
+  const { updater, publicTransport, transport, buffer, installBundle } = await setup();
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer, {
+    version: '0.1.7', name: 'dsh-flash-stabilizer-0.1.7.tgz',
+  }))));
+  expect((await updater.check()).phase).toBe('current');
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(Date.now() + 60001);
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer))));
+  expect((await updater.check()).phase).toBe('available');
+  expect(publicTransport).toHaveBeenCalledTimes(2); expect(transport).not.toHaveBeenCalled();
+  await updater.setAutomatic(true); await settled(updater);
+  expect(installBundle).toHaveBeenCalledTimes(1); expect(publicTransport).toHaveBeenCalledTimes(2);
+});
+it('falls back to the API asset when the public download host is unreachable', async () => {
+  const { updater, publicTransport, transport, buffer, installBundle } = await setup();
+  publicTransport.mockImplementation(async () => new Response(JSON.stringify(publicManifest(buffer, { assetId: 10 }))));
+  transport.mockImplementation(async url => {
+    if (String(url).startsWith('https://github.com/')) throw new TypeError('Connection timeout');
+    return new Response(new Uint8Array(buffer));
+  });
+  await updater.check(); updater.install(); await settled(updater);
+  expect(updater.status().phase).toBe('restart-required'); expect(installBundle).toHaveBeenCalledTimes(1);
+  expect(transport.mock.calls.map(([url]) => String(url))).toEqual([
+    'https://github.com/MyRemme/dsh-flash-stabilizer/releases/download/v0.1.8/dsh-flash-stabilizer-0.1.8.tgz',
+    'https://api.github.com/repos/MyRemme/dsh-flash-stabilizer/releases/assets/10',
+  ]);
+});
 async function settled(updater: Updater) {
   for (let i = 0; i < 100; i++) {
     if (!['downloading', 'installing'].includes(updater.status().phase)) return;
@@ -125,8 +251,9 @@ it('rechecks a cached archive before handing it to the host', async () => {
   await updater.check(); updater.install(); await settled(updater);
   const hash = release.assets[0]!.digest.slice(7);
   await writeFile(join(directory, '.flash-stabilizer/updates', `dsh-flash-stabilizer-0.1.8-${hash.slice(0, 12)}.tgz`), 'changed since validation');
-  allow = true; updater.install(); await settled(updater);
-  expect(installBundle).not.toHaveBeenCalled(); expect(updater.status()).toMatchObject({ phase: 'error', error: 'checksum-failed' });
+  allow = true; updater.install();
+  await vi.waitFor(() => expect(updater.status()).toMatchObject({ phase: 'error', error: 'checksum-failed' }));
+  expect(installBundle).not.toHaveBeenCalled();
   expect(transport.mock.calls.filter(([url]) => String(url).includes('/assets/'))).toHaveLength(1);
 });
 it('revokes a queued automatic install when automatic updates are disabled', async () => {
@@ -243,8 +370,9 @@ it('pins the manual candidate without a network recheck that could discard the u
   expect(installBundle).toHaveBeenCalledTimes(1);
 });
 it('schedules checks every six hours only when automatic updates are enabled', async () => {
-  const { directory, transport, installBundle } = await setup({ busy: true });
-  const updater = new Updater({ directory, hostVersion: '0.2.1-rc.2', currentVersion: '0.1.7', fetch: transport,
+  const { directory, transport, publicTransport, installBundle } = await setup({ busy: true });
+  const updater = new Updater({ directory, hostVersion: '0.2.1-rc.2', currentVersion: '0.1.7',
+    fetch: (url, options) => String(url).endsWith('/stable.json') ? publicTransport(url, options) : transport(url, options),
     manager: { installBundle }, idle: () => false });
   updaters.push(updater); vi.useFakeTimers(); await updater.start();
   await vi.advanceTimersByTimeAsync(30000); expect(transport).not.toHaveBeenCalled();

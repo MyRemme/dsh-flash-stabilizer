@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, mkdir, rename, writeFile, stat } from 'node:fs/promises';
+import { readFile, mkdir, rename, writeFile, stat, unlink } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { valid, gt, satisfies } from 'semver';
@@ -13,6 +14,8 @@ const API = 'https://api.github.com/repos/MyRemme/dsh-flash-stabilizer';
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { name: string; version: string };
 const MAX_ARCHIVE = 32 * 1024 * 1024;
 const INTERVAL = 6 * 60 * 60 * 1000;
+const CHECK_CACHE = 60 * 1000;
+const PUBLIC_MANIFEST = 'https://raw.githubusercontent.com/MyRemme/dsh-flash-stabilizer/main/updates/stable.json';
 export interface UpdateStatus {
   repository: string; currentVersion: string; available: boolean; automatic: boolean;
   phase: 'unavailable' | 'idle' | 'checking' | 'current' | 'available' | 'waiting-idle' | 'downloading' | 'installing' | 'restart-required' | 'error';
@@ -28,8 +31,8 @@ export interface UpdateAPI {
 export interface Manager {
   installBundle(spec: string, options?: { enabled?: boolean; requestId?: string }): Promise<{ application: string; version?: string }>;
 }
-interface Asset { id: number; name: string; size: number; digest?: string }
-interface Candidate { version: string; asset: Asset; checksum: Asset | undefined }
+interface Asset { id?: number; name: string; size: number; digest?: string }
+interface Candidate { version: string; asset: Asset; checksum: Asset | undefined; source: 'api' | 'public' }
 type InstallSource = 'manual' | 'automatic';
 interface InstallTask { source: InstallSource; abort: AbortController; submitted: boolean }
 class UpdateFailure extends Error {}
@@ -44,10 +47,23 @@ export function releaseCandidate(value: unknown, current: string): Candidate | n
   const asset = release.assets.find(asset => asset.name === `${manifest.name}-${version}.tgz`);
   const checksum = release.assets.find(asset => asset.name === 'checksums.sha256');
   for (const item of [asset, checksum].filter(Boolean) as Asset[]) {
-    if (!Number.isSafeInteger(item.id) || item.id <= 0 || !Number.isSafeInteger(item.size) || item.size <= 0 || item.size > MAX_ARCHIVE) return failure('invalid-release');
+    if (!Number.isSafeInteger(item.id) || !item.id || item.id <= 0 || !Number.isSafeInteger(item.size) || item.size <= 0 || item.size > MAX_ARCHIVE) return failure('invalid-release');
   }
   if (!asset || (!/^sha256:[a-f\d]{64}$/i.test(asset.digest ?? '') && !checksum)) return failure('missing-artifact');
-  return { version, asset, checksum };
+  return { version, asset, checksum, source: 'api' };
+}
+
+/** Public Release metadata uses fixed repository URLs, never supplied download URLs. */
+export function manifestCandidate(value: unknown, current: string): Candidate | null {
+  const data = value as { schemaVersion?: unknown; version?: unknown; name?: unknown; size?: unknown; sha256?: unknown; assetId?: unknown } | null;
+  if (!data || data.schemaVersion !== 1 || typeof data.version !== 'string' || !valid(data.version) || data.version.includes('-')
+    || data.name !== `${manifest.name}-${data.version}.tgz` || !Number.isSafeInteger(data.size) || (data.size as number) <= 0
+    || (data.size as number) > MAX_ARCHIVE || typeof data.sha256 !== 'string' || !/^[a-f\d]{64}$/i.test(data.sha256)
+    || (data.assetId !== undefined && (!Number.isSafeInteger(data.assetId) || (data.assetId as number) <= 0))) return failure('invalid-release');
+  if (!gt(data.version, current)) return null;
+  return { version: data.version, source: 'public', checksum: undefined,
+    asset: { name: data.name, size: data.size as number, digest: `sha256:${data.sha256}`,
+      ...(data.assetId === undefined ? {} : { id: data.assetId as number }) } };
 }
 
 /** Inspect every entry before pnpm sees it; no links, traversal or install scripts. */
@@ -88,6 +104,7 @@ export class Updater implements UpdateAPI {
   private directory: string;
   private saving: Promise<void> = Promise.resolve();
   private nextCheck = Date.now();
+  private apiRetryAt = 0;
   constructor(private readonly options: {
     directory: string; hostVersion: string; manager: Manager; idle: () => boolean;
     fetch?: typeof fetch;
@@ -121,8 +138,17 @@ export class Updater implements UpdateAPI {
     const temporary = join(this.directory, `state-${randomUUID()}.tmp`);
     this.saving = this.saving.catch(() => {}).then(async () => {
       await mkdir(this.directory, { recursive: true });
-      await writeFile(temporary, snapshot, { mode: 0o600 });
-      await rename(temporary, join(this.directory, 'state.json'));
+      try {
+        await writeFile(temporary, snapshot, { mode: 0o600 });
+        for (let attempt = 0; ; attempt++) {
+          try { await rename(temporary, join(this.directory, 'state.json')); break; }
+          catch (error) {
+            // Windows readers/antivirus can briefly hold the destination open.
+            if (process.platform !== 'win32' || attempt >= 4 || !['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+            await delay(15 * 2 ** attempt);
+          }
+        }
+      } finally { await unlink(temporary).catch(() => {}); }
     });
     return this.saving;
   }
@@ -143,23 +169,35 @@ export class Updater implements UpdateAPI {
     }
     if (this.installing?.source === 'automatic' && !this.installing.submitted) this.installing.abort.abort();
   }
-  private async request(path: string, limit: number, binary = false, cancellation?: AbortSignal): Promise<Buffer> {
+  private async request(url: string, limit: number, binary = false, cancellation?: AbortSignal): Promise<Buffer> {
     const transport = this.options.fetch ?? fetch;
     const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(30000), ...(cancellation ? [cancellation] : [])]);
     signal.throwIfAborted();
-    const response = await transport(API + path, { redirect: 'manual', signal, headers: {
-      Accept: binary ? 'application/octet-stream' : 'application/vnd.github+json', 'User-Agent': manifest.name,
-      'X-GitHub-Api-Version': '2022-11-28',
+    const api = url.startsWith(API + '/');
+    let result = await transport(url, { redirect: 'manual', signal, headers: {
+      Accept: binary ? 'application/octet-stream' : api ? 'application/vnd.github+json' : 'application/json', 'User-Agent': manifest.name,
+      ...(api ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
     } });
-    let result = response;
-    if (binary && [301, 302, 303, 307, 308].includes(response.status)) {
-      const target = new URL(response.headers.get('location') ?? '');
-      if (target.protocol !== 'https:' || target.port || target.username || target.password || !['release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'github-releases.githubusercontent.com'].includes(target.hostname)) return failure('invalid-redirect');
-      // Signed GitHub asset redirects also use anonymous requests.
-      await response.body?.cancel();
-      result = await transport(target, { redirect: 'error', signal });
+    for (let redirects = 0; [301, 302, 303, 307, 308].includes(result.status); redirects++) {
+      const location = result.headers.get('location');
+      await result.body?.cancel();
+      if (!location || redirects >= 3 || (api && !binary)) return failure('invalid-redirect');
+      let target: URL;
+      try { target = new URL(location, url); } catch { return failure('invalid-redirect'); }
+      const repositoryAsset = !api && target.origin === 'https://github.com'
+        && target.pathname.startsWith('/MyRemme/dsh-flash-stabilizer/releases/download/');
+      const signedAsset = ['release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'github-releases.githubusercontent.com'].includes(target.hostname);
+      if (target.protocol !== 'https:' || target.port || target.username || target.password || (!repositoryAsset && !signedAsset)) return failure('invalid-redirect');
+      // Redirects never forward request headers or credentials.
+      result = await transport(target, { redirect: 'manual', signal });
+      url = target.href;
     }
-    if ([401, 403, 404].includes(result.status)) { await result.body?.cancel(); return failure(result.status === 403 ? 'github-denied' : 'github-auth-or-release'); }
+    if (api && [403, 429].includes(result.status)) {
+      const reset = Number(result.headers.get('x-ratelimit-reset')) * 1000;
+      const retry = Number(result.headers.get('retry-after')) * 1000;
+      this.apiRetryAt = Math.max(Date.now() + CHECK_CACHE, Number.isFinite(reset) ? reset : 0, Number.isFinite(retry) ? Date.now() + retry : 0);
+    }
+    if ([401, 403, 404, 429].includes(result.status)) { await result.body?.cancel(); return failure([403, 429].includes(result.status) ? 'github-denied' : 'github-auth-or-release'); }
     if (!result.ok || !result.body) { await result.body?.cancel(); return failure('github-network'); }
     const parts: Buffer[] = []; let size = 0;
     const reader = result.body.getReader();
@@ -174,21 +212,44 @@ export class Updater implements UpdateAPI {
     } finally { await reader.cancel().catch(() => {}); }
     return Buffer.concat(parts);
   }
+  private async latest(): Promise<{ candidate: Candidate | null; version: string }> {
+    // The published stable feed is independent of the REST API's shared IP quota.
+    // Keep the API for old releases and networks that cannot reach github.com.
+    try {
+      const body = await this.request(PUBLIC_MANIFEST, 16 * 1024);
+      const data = JSON.parse(body.toString());
+      return { candidate: manifestCandidate(data, this.state.currentVersion), version: data.version };
+    } catch (error) {
+      if (this.abort.signal.aborted) throw error;
+      // Never bypass malformed metadata or an unsafe redirect with another source.
+      if (error instanceof UpdateFailure && !['github-auth-or-release', 'github-denied', 'github-network'].includes(error.message)) throw error;
+      if (error instanceof SyntaxError) return failure('invalid-release');
+    }
+    if (Date.now() < this.apiRetryAt) return failure('github-denied');
+    const body = await this.request(`${API}/releases/latest`, 1024 * 1024);
+    const data = JSON.parse(body.toString());
+    return { candidate: releaseCandidate(data, this.state.currentVersion), version: data.tag_name.replace(/^v/, '') };
+  }
   check(): Promise<UpdateStatus> {
     if (this.work) return this.work;
     if (this.disposed || this.installing || this.state.phase === 'restart-required') return Promise.resolve(this.status());
     // A manual request pins the release the user chose. Neither a background
     // check nor the automatic preference may replace or discard that job.
     if (this.pending === 'manual') return Promise.resolve(this.status());
+    if (['current', 'available'].includes(this.state.phase) && this.state.checkedAt
+      && Date.now() - Date.parse(this.state.checkedAt) < CHECK_CACHE) {
+      if (this.state.automatic && this.candidate) this.startInstall('automatic');
+      return Promise.resolve(this.status());
+    }
     this.work = (async () => {
       this.nextCheck = Date.now() + INTERVAL;
       this.pending = null; this.candidate = null; this.prepared = null;
       this.state.phase = 'checking'; this.state.error = null;
       try {
-        const body = await this.request('/releases/latest', 1024 * 1024);
-        this.candidate = releaseCandidate(JSON.parse(body.toString()), this.state.currentVersion);
+        const latest = await this.latest();
+        this.candidate = latest.candidate;
         this.state.checkedAt = new Date().toISOString();
-        this.state.latestVersion = this.candidate?.version ?? this.state.currentVersion;
+        this.state.latestVersion = latest.version;
         this.state.phase = this.candidate ? 'available' : 'current';
         if (this.state.automatic && this.candidate) this.pending = 'automatic';
         await this.save();
@@ -247,11 +308,22 @@ export class Updater implements UpdateAPI {
       }
       this.prepared = null;
     }
-    const archive = await this.request(`/releases/assets/${candidate.asset.id}`, MAX_ARCHIVE, true, task.abort.signal);
+    let archive: Buffer;
+    try {
+      archive = await this.request(candidate.source === 'public'
+        ? `${REPOSITORY}/releases/download/v${candidate.version}/${candidate.asset.name}`
+        : `${API}/releases/assets/${candidate.asset.id}`, MAX_ARCHIVE, true, task.abort.signal);
+    } catch (error) {
+      active();
+      if (candidate.source !== 'public' || !candidate.asset.id || Date.now() < this.apiRetryAt
+        || (error instanceof UpdateFailure && !['github-auth-or-release', 'github-denied', 'github-network'].includes(error.message))) throw error;
+      // Some networks can access the API/CDN but cannot connect to github.com.
+      archive = await this.request(`${API}/releases/assets/${candidate.asset.id}`, MAX_ARCHIVE, true, task.abort.signal);
+    }
     active();
     let hash = candidate.asset.digest?.match(/^sha256:([a-f\d]{64})$/i)?.[1]?.toLowerCase();
     if (!hash && candidate.checksum) {
-      const sums = (await this.request(`/releases/assets/${candidate.checksum.id}`, 64 * 1024, true, task.abort.signal)).toString();
+      const sums = (await this.request(`${API}/releases/assets/${candidate.checksum.id}`, 64 * 1024, true, task.abort.signal)).toString();
       active();
       hash = sums.split(/\r?\n/).map(line => /^([a-f\d]{64})\s+\*?(\S+)$/.exec(line)).find(match => match?.[2] === candidate.asset.name)?.[1];
     }
