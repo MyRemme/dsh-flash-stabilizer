@@ -1,6 +1,12 @@
 node_modules/
 dist/
 artifacts/
+evaluations/
+releases/
+FEASIBILITY_REVIEW.zh-CN.md
+PRIVACY_REVIEW.zh-CN.md
+TEST_REPORT.zh-CN.md
+VALIDATION.zh-CN.md
 .npm-cache/
 .compat-cache/
 coverage/
