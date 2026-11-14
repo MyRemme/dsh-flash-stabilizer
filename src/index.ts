@@ -1,7 +1,6 @@
 import { readFileSync, statSync } from 'node:fs';
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { writeProfileFile } from './profile-file.js';
 import { resolveSettings, Config, type Settings } from './config.js';
 import { compatibilityFor, detectHostVersion } from './compatibility.js';
 import { StreamMonitor } from './monitor.js';
@@ -328,6 +327,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
     setMonitoring: enabled => guarded(() => {
       monitoring = enabled;
       for (const state of states.values()) {
+        if (!enabled) state.progress.clear();
         if (!enabled && state.request) { state.coverage = 'unavailable'; delete state.request; }
         recovery.setEnabled(state.agent, enabled && state.enabled && selected(state.request?.route ?? state.route ?? {}));
       }
@@ -338,12 +338,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       const operation = modeSaving.catch(() => {}).then(async () => {
         if (disposed) throw new Error('settings unavailable');
         if (modeFile) {
-          const temporary = `${modeFile}.${randomUUID()}.tmp`;
-          await mkdir(dirname(modeFile), { recursive: true });
-          try {
-            await writeFile(temporary, JSON.stringify({ mode: nextMode }, null, 2) + '\n', { mode: 0o600 });
-            await rename(temporary, modeFile);
-          } finally { await unlink(temporary).catch(() => {}); }
+          await writeProfileFile(modeFile, JSON.stringify({ mode: nextMode }, null, 2) + '\n');
         }
         configuredMode = nextMode;
         effectiveMode = modeFor(nextMode);
@@ -370,6 +365,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       const agent = states.get(sessionId)?.agent ?? ctx.agents?.get(sessionId);
       if (!agent) return;
       const state = stateFor(agent); state.enabled = enabled;
+      if (!enabled) state.progress.clear();
       if (!enabled && state.request) { state.coverage = 'unavailable'; delete state.request; }
       recovery.setEnabled(agent, enabled && monitoring && selected(state.request?.route ?? state.route ?? agent.model?.current() ?? agent.options ?? {}));
     }),

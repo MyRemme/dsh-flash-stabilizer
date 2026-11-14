@@ -231,3 +231,16 @@ it('emits milestone warnings on continued tool repetition', async () => {
   expect(events.map(e => e.repeats)).toEqual([8, 4]);
   expect(events[0]!.score).toBeGreaterThan(events[1]!.score);
 });
+it.each(['global', 'session'])('starts a fresh tool repetition sequence after %s monitoring resumes', async target => {
+  const { host, api } = setup(), agent = makeAgent('pause-tools');
+  await stream(host, agent, chunks('normal'), false);
+  const exec = { agent, name: 'run', arguments: { cmd: 'test' } }, result = { content: 'same result' };
+  for (let i = 0; i < 3; i++) host.emit('tools/result', exec, result);
+  if (target === 'global') api.setMonitoring(false); else api.setSessionEnabled(agent.id, false);
+  host.emit('tools/result', exec, result);
+  if (target === 'global') api.setMonitoring(true); else api.setSessionEnabled(agent.id, true);
+  host.emit('tools/result', exec, result);
+  expect(api.sessionStatus(agent.id).toolWarnings).toBe(0);
+  for (let i = 0; i < 3; i++) host.emit('tools/result', exec, result);
+  expect(api.sessionStatus(agent.id).toolWarnings).toBe(1);
+});

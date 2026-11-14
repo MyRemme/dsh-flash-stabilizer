@@ -59,7 +59,6 @@ export class RecoveryController {
     if (count >= this.config.maxRecoveries) { this.record('budget-exhausted', agent, origin); return; }
     if (this.mode === 'assist') {
       if (!agent.followup || !agent.inbox) { this.record('intervention-unavailable', agent, origin); return; }
-      this.attempts.set(agent.id, count + 1);
       this.pending.set(agent, { mode: 'assist', signal, scheduled: false, origin });
       this.record('correction-deferred', agent, origin);
       return;
@@ -95,7 +94,9 @@ export class RecoveryController {
         this.pending.delete(agent);
         if (this.disposed || this.disabled.has(agent.id) || agent.status !== 'idle' || pending.mode === 'assist' && pending.signal.aborted) { this.record('correction-revoked', agent, pending.origin); return; }
         if (!agent.inbox || agent.inbox.nextStep.length || agent.inbox.nextTurn.length) { this.record('user-input-takes-priority', agent, pending.origin); return; }
-        agent.followup?.(correction(this.config.language));
+        if (!agent.followup) { this.record('recovery-failed', agent, pending.origin); return; }
+        if (pending.mode === 'assist') this.attempts.set(agent.id, (this.attempts.get(agent.id) ?? 0) + 1);
+        agent.followup(correction(this.config.language));
         this.record('recovery-submitted', agent, pending.origin);
       } catch { this.record('recovery-failed', agent, pending.origin); }
     });

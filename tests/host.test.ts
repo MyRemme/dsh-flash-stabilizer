@@ -7,6 +7,8 @@ it('loads and unloads in the real published DSH AgentLoop and detects actual too
   expect(result.status).toBe('passed');
   expect(result.checks).toContain('lossless-chunks');
   expect(result.checks).toContain('tool-results');
+  expect(result.checks).toContain('tool-repeat-reset-global');
+  expect(result.checks).toContain('tool-repeat-reset-session');
   expect(result.checks).toContain('default-third-party-model');
   expect(result.checks).toContain('scope-provider-isolation');
   expect(result.checks).toContain('scope-restored-all');

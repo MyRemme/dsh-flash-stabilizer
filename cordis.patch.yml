@@ -1,6 +1,6 @@
 - insert:
     - id: flash-stabilizer
-      name: ./dist/runtime-0.1.15.js
+      name: ./dist/runtime-0.1.16.js
       config:
         mode: observe
         modelScope: all

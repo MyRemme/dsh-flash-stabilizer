@@ -4,6 +4,27 @@ import { RecoveryController } from '../src/recovery.js';
 import { makeAgent } from './helpers.js';
 const ending = { reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'dsh-flash-stabilizer: confirmed repetition' } } };
 describe('bounded recovery', () => {
+  it.each(['pause', 'mode', 'after-idle'])('preserves the assist budget when a pending correction is revoked by %s', async scenario => {
+    const agent = { ...makeAgent(), followup: vi.fn() }, actions: string[] = [];
+    const c = new RecoveryController({ ...defaults, mode: 'assist' }, action => actions.push(action));
+    for (let i = 0; i < 3; i++) {
+      agent.status = 'running';
+      c.request(agent, new AbortController().signal, false);
+      if (scenario === 'mode') { c.setMode('observe'); c.setMode('assist'); }
+      else {
+        if (scenario === 'after-idle') { agent.status = 'idle'; c.settled(agent, { reason: { kind: 'completed' } }); }
+        c.setEnabled(agent, false); c.setEnabled(agent, true);
+      }
+      await Promise.resolve();
+    }
+    for (let i = 0; i < 3; i++) {
+      agent.status = 'running'; c.request(agent, new AbortController().signal, false);
+      agent.status = 'idle'; c.settled(agent, { reason: { kind: 'completed' } }); await Promise.resolve();
+    }
+    expect(agent.followup).toHaveBeenCalledTimes(2);
+    expect(actions.filter(action => action === 'correction-revoked')).toHaveLength(3);
+    expect(actions.filter(action => action === 'budget-exhausted')).toHaveLength(1);
+  });
   it.each(['nextStep', 'nextTurn'] as const)('preserves queued %s input without cancelling it', target => {
     const agent = { ...makeAgent(), cancel: vi.fn(), followup: vi.fn() }, actions: string[] = [];
     const c = new RecoveryController({ ...defaults, mode: 'guard' }, action => actions.push(action));

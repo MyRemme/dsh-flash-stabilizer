@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, mkdir, rename, writeFile, stat, unlink } from 'node:fs/promises';
-import { setTimeout as delay } from 'node:timers/promises';
+import { readFile, mkdir, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { valid, gt, satisfies } from 'semver';
@@ -8,6 +7,7 @@ import { list } from 'tar';
 import { gunzipSync } from 'node:zlib';
 import { finished } from 'node:stream/promises';
 import type { HostContext } from './types.js';
+import { writeProfileFile } from './profile-file.js';
 
 export const REPOSITORY = 'https://github.com/MyRemme/dsh-flash-stabilizer';
 const API = 'https://api.github.com/repos/MyRemme/dsh-flash-stabilizer';
@@ -135,20 +135,8 @@ export class Updater implements UpdateAPI {
   status(): UpdateStatus { return { ...this.state }; }
   private save(): Promise<void> {
     const snapshot = JSON.stringify(this.state, null, 2) + '\n';
-    const temporary = join(this.directory, `state-${randomUUID()}.tmp`);
     this.saving = this.saving.catch(() => {}).then(async () => {
-      await mkdir(this.directory, { recursive: true });
-      try {
-        await writeFile(temporary, snapshot, { mode: 0o600 });
-        for (let attempt = 0; ; attempt++) {
-          try { await rename(temporary, join(this.directory, 'state.json')); break; }
-          catch (error) {
-            // Windows readers/antivirus can briefly hold the destination open.
-            if (process.platform !== 'win32' || attempt >= 4 || !['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
-            await delay(15 * 2 ** attempt);
-          }
-        }
-      } finally { await unlink(temporary).catch(() => {}); }
+      await writeProfileFile(join(this.directory, 'state.json'), snapshot);
     });
     return this.saving;
   }

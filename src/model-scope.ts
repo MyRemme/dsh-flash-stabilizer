@@ -1,7 +1,6 @@
 import { readFileSync, statSync } from 'node:fs';
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { writeProfileFile } from './profile-file.js';
 
 export interface ModelSelection { provider?: string; model: string }
 export interface ModelScopeSettings { scope: 'all' | 'selected'; selections: ModelSelection[] }
@@ -79,12 +78,7 @@ export class ModelScopeStore {
     const operation = this.saved.catch(() => {}).then(async () => {
       if (this.disposed) throw new Error('settings unavailable');
       if (this.file) {
-        const file = this.file, temporary = `${file}.${randomUUID()}.tmp`;
-        await mkdir(dirname(file), { recursive: true });
-        try {
-          await writeFile(temporary, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
-          await rename(temporary, file);
-        } finally { await unlink(temporary).catch(() => {}); }
+        await writeProfileFile(this.file, JSON.stringify(next, null, 2) + '\n');
       }
       this.current = next; this.loadError = false;
       if (!this.disposed) this.changed();

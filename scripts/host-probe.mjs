@@ -35,6 +35,7 @@ try {
   let response = 'normal', requests = 0, toolBodies = 0, correctionsSeen = 0, guardClosed = false, guardConsumed = 0;
   let reviewReady, reviewResume, queuedStep = 0, scenarioChars = 0;
   let recoveryStep = 0, sawRecoveredToolResult = false, waitingReady;
+  let pauseTools = 0, pauseWarnings = 0;
   const turnReasons = [];
   ctx.on('session/event', (_session, event) => { if (event.type === 'turn/end') turnReasons.push(event.data.reason.kind); });
   const hostHint = process.argv[4] ? {} : { hostVersion: version };
@@ -108,7 +109,7 @@ try {
         }
         assert.ok(recoveryStep <= 3, 'bounded max-token recovery');
       }
-      if (response === 'tools' && toolBodies < 4) {
+      if (response === 'tools' && toolBodies < 4 || response.startsWith('pause-tools-') && pauseTools < 8) {
         const call = { type: 'tool-call', id: `call-${requests}`, name: 'read_evidence', arguments: '{}' };
         yield { type: 'block-end', index: 0, block: call };
         yield { type: 'finish', reason: { kind: 'tool-calls' } };
@@ -154,11 +155,32 @@ try {
   assert.deepEqual(seen, raw); checks.push('lossless-chunks');
   ctx.tools.register({ name: 'read_evidence', description: 'Read deterministic evidence', parameters: {},
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-    execute: async () => { toolBodies++; return 'same evidence'; },
+    execute: async () => {
+      toolBodies++;
+      if (response.startsWith('pause-tools-')) {
+        pauseTools++;
+        if (pauseTools === 4 || pauseTools === 5) {
+          const enabled = pauseTools === 5;
+          if (response === 'pause-tools-global') ctx.flashStabilizer.setMonitoring(enabled);
+          else ctx.flashStabilizer.setSessionEnabled(current.id, enabled);
+        }
+        assert.equal(ctx.flashStabilizer.sessionStatus(current.id).toolWarnings, pauseWarnings, 'no tool warning across a paused interval');
+      }
+      return 'same evidence';
+    },
   });
   response = 'tools'; await send();
   assert.equal(toolBodies, 4, 'plugin must not skip/replay tool calls');
   assert.ok(ctx.flashStabilizer.status().counts['tool-repeat'] >= 1, 'tool repetition detection'); checks.push('tool-results');
+  for (const target of ['global', 'session']) {
+    response = `pause-tools-${target}`; pauseTools = 0;
+    pauseWarnings = ctx.flashStabilizer.sessionStatus(current.id).toolWarnings;
+    const beforeTools = toolBodies;
+    await send();
+    assert.equal(toolBodies - beforeTools, 8, 'pausing monitoring never skips or replays tools');
+    assert.equal(ctx.flashStabilizer.sessionStatus(current.id).toolWarnings, pauseWarnings + 1, 'four fresh results warn after resuming');
+    checks.push(`tool-repeat-reset-${target}`);
+  }
   const originalAgent = current;
   const customRoute = { provider: 'mock', model: 'vendor/DeepSeek-Custom:fast' };
   current = await ctx.agentLoop.create(sessions.SessionId(`custom-model-${version}`), customRoute);
