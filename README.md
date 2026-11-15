@@ -1,5 +1,11 @@
 # DSH Flash Stabilizer
 
+> **不再维护 / No Longer Maintained**
+>
+> 本项目已停止维护并迁移至新仓库 **[DSH Runtime Guard](https://github.com/MyRemme/dsh-runtime-guard)**（`dsh-runtime-guard`）。
+>
+> 新仓库已将 **Flash 防空转 / 卡死恢复** 与升级后的 **操作安全防护**（含工作区边界限制、`str_replace_editor` / `terminal_*` 覆盖及 DSH 原生审批确认）合并为一体，后续更新与修复均在新仓库发布，请前往获取最新版本。
+
 面向 DeepSeek Harness（DSH）的防空转插件。它监控模型推理、正文和工具结果，在发现持续重复时提示用户。对通过兼容验证的宿主，可启用防护停止来结束已确认的重复推理。检测规则主要针对 DeepSeek Flash 的空转特征，默认覆盖所有渠道和模型，包括第三方渠道的自定义模型名。
 
 另提供独立的「操作防护」模块，在工具执行前检查已识别的提权、只读修改和危险调用，通过 DSH 原生审批处理需要单次批准的操作。操作防护默认关闭，可在面板开启；暂停防空转、暂停某个对话监控或更改模型范围不影响它。
