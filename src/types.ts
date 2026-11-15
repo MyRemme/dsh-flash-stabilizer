@@ -13,7 +13,7 @@ export interface Agent {
   cancel?(cause: { kind: 'hook'; reason: string }, options: { keepInbox: true }): void;
   followup?(message: UserMessage): void;
   inject?(message: UserMessage): void;
-  session?: { snapshotEvents?(): readonly SessionEvent[] };
+  session?: { header?: { cwd?: string }; snapshotEvents?(): readonly SessionEvent[] };
 }
 export interface SessionEvent { type: string; data: Record<string, unknown> }
 export interface RequestOptions {
@@ -25,7 +25,8 @@ export interface StepPayload {
   messages: readonly { source?: { kind?: string } }[];
   modelSelection?: { model: string; provider: string };
 }
-export interface ToolExecution { name: string; arguments: unknown; agent?: Agent; signal?: AbortSignal }
+export interface ToolExecution { name: string; arguments: unknown; agent?: Agent; signal?: AbortSignal; callId?: string }
+export type PreToolDecision = { kind: 'allow' | 'cancel' } | { kind: 'deny'; reason: string } | { kind: 'ask'; reason?: string };
 export interface ToolResult { isError: boolean; content?: unknown; value?: unknown; error?: unknown; meta?: unknown }
 export interface HostContext {
   on(name: string, listener: (...args: any[]) => any): () => void;
@@ -36,6 +37,7 @@ export interface HostContext {
   logger?: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
   agents?: { get(id: string): Agent | undefined; list?(): Agent[] };
   llm?: unknown;
+  tools?: { guard(check: (exec: ToolExecution) => string | undefined): () => void };
 }
 export interface ConnectionService {
   rpc: { handle(channel: string, handler: RpcHandler): unknown };

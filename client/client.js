@@ -154,6 +154,7 @@ window.__ModuleLoader__.load({
           const value = await call(endpoint, payload);
           if (disposed) return;
           if (endpoint === 'setMonitoring' || endpoint === 'setMode') accept(value);
+          if (endpoint === 'setOperationSafety') publish({ data: state.data ? { ...state.data, operationSafety: value } : null, safetyError: '' });
           if (endpoint === 'setSessionEnabled' && payload?.sessionId && watched.has(payload.sessionId)) {
             publish({ sessions: { ...state.sessions, [payload.sessionId]: value }, sessionErrors: { ...state.sessionErrors, [payload.sessionId]: '' } });
           }
@@ -165,7 +166,7 @@ window.__ModuleLoader__.load({
             downloads.set(url, setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(url); }, 60000));
             const a = document.createElement('a'); a.href = url; a.download = 'flash-stabilizer-diagnostics.json'; document.body.appendChild(a); a.click(); a.remove();
           }
-        } catch { publish(endpoint === 'setModelScope' ? { scopeError: '范围保存失败，原设置仍然生效。请重试。' } : { error: '操作未完成，请重试。' }); }
+        } catch { publish(endpoint === 'setOperationSafety' ? { safetyError: '操作防护设置保存失败，原设置仍然生效。请重试。' } : endpoint === 'setModelScope' ? { scopeError: '范围保存失败，原设置仍然生效。请重试。' } : { error: '操作未完成，请重试。' }); }
         finally { generation++; publish({ busy: false }); void refresh(); void refreshScope(); refreshConversations(); for (const id of watched.keys()) refreshSession(id); }
       }
       const onVisibility = () => { if (document.visibilityState !== 'hidden' && !disposed) void poll(); };
@@ -242,8 +243,36 @@ window.__ModuleLoader__.load({
             h('section', { className: 'fs-section' }, h('div', { className: 'fs-section-head' }, h('h3', null, '检测与处理'), h('span', { className: 'fs-muted' }, `${events.length} 条记录`)),
               filter && command('显示全部对话', () => setFilter(''), UI.IconCloseOutlineRegular, false),
               events.length ? h(Events, { events, mode: data.mode, conversations: state.conversations }) : h('div', { className: 'fs-empty' }, '尚无检测记录'), h('p', { className: 'fs-note' }, '显示发生在哪个对话、第几轮、推理或正文的重复特征、原因和实际动作。不保存推理正文、工具参数或命令；导出不包含对话名称和原始 ID。'))),
-          h(ModelScope, { state }), h(Updates, { state }),
+          h(OperationSafety, { state }), h(ModelScope, { state }), h(Updates, { state }),
           h('footer', { className: 'fs-muted' }, `最近同步 ${time(state.updatedAt)}`)));
+      }
+      function OperationSafety({ state }) {
+        const value = state.data?.operationSafety;
+        const labels = { disabled: '未开启', active: '已启用 · 执行前检查', blocked: '防护不可用 · 已阻止受保护工具', disposed: '已停止' };
+        const rules = {
+          elevation: '系统提权', 'read-only-write': '只读模式修改', 'read-only-unknown': '无法确认仅进行读取',
+          destructive: '破坏性操作', 'opaque-execution': '脚本或动态执行', 'invalid-arguments': '参数无法识别',
+          'policy-unavailable': '无法读取宿主权限', 'host-unverified': '此宿主版本尚未验证', 'guard-unavailable': '缺少硬拦截接口',
+          'settings-invalid': '设置无法读取，请重新保存开关', 'check-failed': '检查异常', 'approval-unavailable': '缺少有效单次审批',
+          'configuration-changed': '审批期间配置发生变化', cancelled: '操作取消',
+        };
+        const actions = { denied: '已阻止', 'approval-requested': '已申请审批', approved: '已获单次批准', rejected: '未获批准', cancelled: '已取消' };
+        return h('section', { className: 'fs-section', 'aria-label': '操作防护' },
+          h('div', { className: 'fs-section-head' }, h('h3', null, '操作防护'), status(state.error ? '状态未同步' : labels[value?.state] || '等待同步', value?.state === 'active' && !state.error ? 'on' : 'off')),
+          h('div', { className: 'fs-tools' }, h('span', { className: 'fs-switch' }, '启用操作防护', h(UI.Switch, {
+            label: '启用操作防护', checked: Boolean(value?.enabled), disabled: !value || Boolean(state.error) || state.busy,
+            onChange: enabled => controller.action('setOperationSafety', { enabled }),
+          }))),
+          h('p', { className: 'fs-note' }, '独立覆盖所有模型；暂停防空转监控或更改模型范围不影响操作防护。默认关闭，开启后拦截已识别的提权和只读修改，其他已识别的危险调用使用 DSH 单次审批。'),
+          state.safetyError && h('p', { className: 'fs-error', role: 'alert' }, state.safetyError),
+          value?.enabled && value.state === 'blocked' && h('p', { className: 'fs-error', role: 'alert' }, rules[value.reason] || '防护暂不可用，受保护工具已阻止；可关闭操作防护恢复宿主原有行为。'),
+          value && h(React.Fragment, null,
+            h('dl', { className: 'fs-facts' }, fact('已检查', value.checked), fact('已阻止 / 未获批准', value.denied), fact('审批请求', value.approvalRequests), fact('单次批准', value.approved), fact('宿主版本', value.hostVersion), fact('设置保存', value.persistent ? '重启后保留' : '仅本次运行')),
+            h('p', { className: 'fs-note' }, `覆盖工具：${value.coveredTools.join('、')}。只读模式仅放行一小部分简单读取命令；脚本识别有覆盖边界，操作防护不能代替系统沙盒。`),
+            value.events.length ? h('ol', { className: 'fs-events' }, ...value.events.slice(0, 20).map((event, index) => h('li', { key: `${event.time}-${index}`, className: 'fs-event' },
+              h('strong', null, `${actions[event.action] || event.action} · ${event.tool}`),
+              h('p', null, rules[event.rule] || event.rule), h('small', { className: 'fs-muted' }, `${time(event.time)} · ${event.session} · ${event.mode}`)))) : h('p', { className: 'fs-muted' }, '尚无操作防护记录。'),
+            h('p', { className: 'fs-note' }, '完整命令和参数在 DSH 原生审批中展示。此处及诊断导出仅保留原因与结果，不保存命令正文。')));
       }
       function ModelScope({ state }) {
         const value = state.modelScope;

@@ -10,6 +10,7 @@ import { RecoveryController } from './recovery.js';
 import { registerUI } from './ui-bridge.js';
 import { registerUpdater } from './updater.js';
 import { ModelScopeStore, type ModelCatalog } from './model-scope.js';
+import { OperationSafety, type SafetyStatus } from './operation-safety.js';
 import type { Agent, Chunk, HostContext, Notice, RequestOptions, StepPayload, ToolExecution, ToolResult } from './types.js';
 
 export { Config };
@@ -21,6 +22,7 @@ export interface StabilizerAPI {
     monitoring: boolean; startedAt: string; monitoredRequests: number; finishedRequests: number; activeRequests: number; lastMonitoredAt: string | null;
     modelScope: ReturnType<ModelScopeStore['summary']>;
     confirmed: number; recoverySubmitted: number; events: ReturnType<MetricsStore['snapshot']>['events']; logging: ReturnType<MetricsStore['snapshot']>['logging'];
+    operationSafety: SafetyStatus;
   };
   sessionStatus(sessionId: string): {
     monitoring: boolean; sessionEnabled: boolean; mode: Settings['mode']; startedAt: string;
@@ -40,6 +42,8 @@ export interface StabilizerAPI {
   refreshModels(): Promise<ReturnType<ModelScopeStore['view']>>;
   selfTest(): { passed: boolean; scope: 'offline-detector-only'; modelRequests: 0 };
   setSessionEnabled(sessionId: string, enabled: boolean): void;
+  operationSafety(): SafetyStatus;
+  setOperationSafety(enabled: boolean): Promise<SafetyStatus>;
 }
 interface RequestState { monitor: StreamMonitor; signal: AbortSignal; route: RequestOptions; frameId?: string; turn: number; step: number; startedAt: string }
 interface SessionState {
@@ -60,6 +64,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
   // Launcher metadata can be provided while its fiber is still activating.
   const profile = ctx.get?.('profileContext', false) as { installAnchor?: string; dir?: string } | undefined;
   const detected = detectHostVersion(profile?.installAnchor);
+  // Only detected metadata unlocks safety; hostVersion is merely a monitor hint.
+  const operationSafety = new OperationSafety(ctx, config.operationSafety, detected ?? '', profile?.dir);
   const compatibility = compatibilityFor(config.hostVersion || detected || '');
   // Explicit version is an observation hint, never permission to unlock recovery.
   if (config.hostVersion && detected !== config.hostVersion) { compatibility.intervention = false; compatibility.guard = false; }
@@ -323,6 +329,7 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       monitoring: monitoring && !disposed, startedAt, monitoredRequests, finishedRequests,
       activeRequests: [...states.values()].filter(state => state.request).length,
       lastMonitoredAt, ...metrics.snapshot(),
+      operationSafety: operationSafety.status(),
     }),
     setMonitoring: enabled => guarded(() => {
       monitoring = enabled;
@@ -349,6 +356,8 @@ export function apply(ctx: HostContext, input: Partial<Settings> = {}): void {
       return operation;
     },
     modelScope: () => modelScope.view(),
+    operationSafety: () => operationSafety.status(),
+    setOperationSafety: enabled => operationSafety.setEnabled(enabled),
     setModelScope: input => modelScope.set(input),
     refreshModels: () => modelScope.refresh((ctx.get?.('llm', false) ?? ctx.llm) as ModelCatalog | undefined),
     selfTest: () => {

@@ -40,6 +40,17 @@ it('requires an owner and validates every UI operation before changing state', (
   expect(call('setMonitoring', { enabled: false }, 'owner', AbortSignal.abort()).error?.code).toBe('ABORTED');
   expect(call('setMonitoring', { enabled: false }).value.monitoring).toBe(false);
 });
+it('restricts operation safety settings to the owner and validates payloads', async () => {
+  const { api, call } = setup();
+  expect(call('operationSafety', {}, 'guest').error?.code).toBe('FORBIDDEN');
+  expect(call('setOperationSafety', { enabled: true }, 'guest').error?.code).toBe('FORBIDDEN');
+  for (const payload of [{}, { enabled: 'true' }, { enabled: true, command: 'anything' }]) expect(call('setOperationSafety', payload).error?.code).toBe('BAD_REQUEST');
+  expect(api.operationSafety().enabled).toBe(false);
+  expect((await call('setOperationSafety', { enabled: true })).value.enabled).toBe(true);
+  expect(api.operationSafety().enabled).toBe(true);
+  expect(call('operationSafety').value.enabled).toBe(true);
+  expect((await call('setOperationSafety', { enabled: false })).value.enabled).toBe(false);
+});
 it('restricts model selection to the owner and omits route names from exports', async () => {
   const { api, call } = setup();
   expect(call('modelScope', {}, 'guest').error?.code).toBe('FORBIDDEN');

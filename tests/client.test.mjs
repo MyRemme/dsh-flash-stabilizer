@@ -47,6 +47,33 @@ async function mount(call, sessionId, services = {}, withPanel = false) {
   return { slots, url, selectPanel };
 }
 const button = text => [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === text || b.textContent === text);
+it('shows independent operation protection, persists its toggle and reports unavailable protection', async () => {
+  let safety = { enabled: false, state: 'disabled', reason: null, hostVersion: '0.2.2-rc.1', persistent: true,
+    coveredTools: ['pwsh', 'write'], checked: 0, denied: 0, approvalRequests: 0, approved: 0, events: [] };
+  let monitoring = true;
+  const call = vi.fn(async (_channel, method, payload) => {
+    if (method === 'setOperationSafety') { safety = { ...safety, enabled: payload.enabled, state: payload.enabled ? 'active' : 'disabled' }; return { ok: true, value: structuredClone(safety) }; }
+    if (method === 'setMonitoring') monitoring = payload.enabled;
+    return { ok: true, value: method === 'conversations' ? [] : { ...baseline(), monitoring, operationSafety: structuredClone(safety) } };
+  });
+  await mount(call);
+  await act(async () => { button('启用操作防护').click(); });
+  expect(call).toHaveBeenCalledWith('/flash-stabilizer', 'setOperationSafety', { enabled: true }, expect.any(AbortSignal));
+  expect(button('启用操作防护').getAttribute('aria-checked')).toBe('true');
+  await act(async () => { button('启用监控').click(); });
+  expect(button('启用操作防护').getAttribute('aria-checked')).toBe('true');
+  safety = { ...safety, state: 'blocked', reason: 'policy-unavailable', denied: 1, events: [{ time: '2026-11-15T12:00:00Z', session: 'session-key', tool: 'pwsh', mode: 'unknown', action: 'denied', rule: 'policy-unavailable' }] };
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(document.querySelector('[aria-label="操作防护"]').textContent).toContain('无法读取宿主权限');
+  expect(document.querySelector('[aria-label="操作防护"]').textContent).toContain('已阻止 · pwsh');
+});
+it('retains the operation safety setting and displays save errors', async () => {
+  const safety = { enabled: true, state: 'active', hostVersion: '0.2.2-rc.1', coveredTools: [], checked: 0, denied: 0, approvalRequests: 0, approved: 0, events: [] };
+  await mount(async (_channel, method) => ({ ok: method !== 'setOperationSafety', value: method === 'conversations' ? [] : { ...baseline(), operationSafety: safety } }));
+  await act(async () => { button('启用操作防护').click(); });
+  expect(button('启用操作防护').getAttribute('aria-checked')).toBe('true');
+  expect(document.body.textContent).toContain('操作防护设置保存失败');
+});
 it('defaults to all models and saves selected channel/model pairs while preserving choices', async () => {
   let settings = { scope: 'all', selections: [], persistent: true, availableModels: [
     { provider: 'route-a', model: 'vendor/deepseek-custom', label: 'DeepSeek 自定义', providerLabel: '渠道 A' },

@@ -14,6 +14,11 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI, updates: Update
       if (signal.aborted) return fail('ABORTED', 'Request cancelled');
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return fail('BAD_REQUEST', 'Invalid payload');
       const keys = Object.keys(payload);
+      if (endpoint === 'setOperationSafety') {
+        const enabled = (payload as { enabled?: unknown }).enabled;
+        if (keys.length !== 1 || typeof enabled !== 'boolean') return fail('BAD_REQUEST', 'Expected enabled boolean');
+        return api.setOperationSafety(enabled).then(value => ({ ok: true, value }), () => fail('SETTINGS_FAILED', 'Could not save operation safety'));
+      }
       if (endpoint === 'setModelScope') {
         let value;
         try { value = validateModelScope(payload); } catch { return fail('BAD_REQUEST', 'Invalid model scope'); }
@@ -49,6 +54,7 @@ export function registerUI(ctx: HostContext, api: StabilizerAPI, updates: Update
         return { ok: true, value: api.sessionStatus(sessionId) };
       }
       if (keys.length) return fail('BAD_REQUEST', 'Expected empty payload');
+      if (endpoint === 'operationSafety') return { ok: true, value: api.operationSafety() };
       if (endpoint === 'modelScope') return { ok: true, value: api.modelScope() };
       if (endpoint === 'refreshModels') return api.refreshModels().then(value => ({ ok: true, value }), () => fail('CATALOG_FAILED', 'Could not read models'));
       if (endpoint === 'updates') return { ok: true, value: updates.status() };

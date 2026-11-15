@@ -1,7 +1,7 @@
 {
   "name": "dsh-flash-stabilizer",
-  "version": "0.1.16",
-  "description": "DSH Flash 推理重复监控、工具重复告警与有限软纠正插件",
+  "version": "0.1.17",
+  "description": "DSH Flash 防空转与独立工具操作防护插件",
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/MyRemme/dsh-flash-stabilizer",
@@ -62,6 +62,7 @@
     "pretest": "npm run build",
     "test:compat": "vitest run tests/compatibility.test.ts",
     "test:host": "vitest run tests/host.test.ts",
+    "test:safety-host": "npm run build && vitest run tests/safety-host.test.ts",
     "test:versions": "npm run build && node scripts/test-versions.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "prepack": "npm run build",
